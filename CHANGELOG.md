@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-04
+
+### Added
+
+- *(gui)* grant Linux input-device access from Settings
+- *(linux)* install the udev rules as root through pkexec
+
+### Fixed
+
+- *(inject)* post windows modifiers and fixed keys with their scan code ([#2350](https://github.com/AprilNEA/OpenLogi/pull/2350))
+- *(device)* switch hosts when a diverted Easy-Switch key is released ([#2355](https://github.com/AprilNEA/OpenLogi/pull/2355))
+- *(gui)* consume the settings view on the macOS permissions page ([#2354](https://github.com/AprilNEA/OpenLogi/pull/2354))
+- *(device)* hear host keys from the moment they are armed ([#2348](https://github.com/AprilNEA/OpenLogi/pull/2348))
+- *(gui)* stack the Ring size segment under its caption
+- *(gui)* match the mouse profile radios to their setting's text size
+- *(gui)* size theme cards to the Appearance page width
+- *(gui)* make Done the primary action after pairing
+- *(gui)* keep Tab working after a pairing step replaces the clicked control
+- *(gui)* fit the Actions Ring page at larger scales and narrow widths
+- *(gui)* give the device name the header's free width
+- *(gui)* drop the Studio Light card title that repeats the tab name
+- *(gui)* let device tabs shrink beside the rail at narrow widths
+- *(gui)* lay out the camera controls with SliderRow
+- *(gui)* set the Settings sensitivity rows in the kit items' type step
+- *(gui)* lay out the press-force row with SliderRow
+- *(gui)* let a mouse label value wrap to three lines
+- *(gui)* keep every key name whole in the keys inspector
+- *(gui)* close Add Device and mark devices reconnecting while the agent is lost
+- *(gui)* give low-contrast theme accents a visible fallback
+- *(gui)* name every window before its first wayland commit ([#2344](https://github.com/AprilNEA/OpenLogi/pull/2344))
+- *(gui)* name OpenLogi Agent in the Input Monitoring row while it is denied ([#2113](https://github.com/AprilNEA/OpenLogi/pull/2113))
+- *(inject)* keep quotes in windows run command ([#2337](https://github.com/AprilNEA/OpenLogi/pull/2337))
+- *(overlay)* let go of the display on windows while nothing shows ([#2339](https://github.com/AprilNEA/OpenLogi/pull/2339))
+- *(device)* report a 0x1000 battery without mileage as a level ([#2333](https://github.com/AprilNEA/OpenLogi/pull/2333))
+
 ## [0.9.0] - 2026-11-03
 
 ### Added

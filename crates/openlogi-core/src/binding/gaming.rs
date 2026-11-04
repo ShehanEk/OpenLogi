@@ -90,9 +90,8 @@ pub const G502_LIGHTSPEED: GamingLayout = GamingLayout {
 /// on real hardware (`openlogi diag mouse-buttons`): 11 slots with the identity
 /// host-mode mapping `01 02 03 04 05 06 07 08 09 0a 0b`, the same shape as the
 /// G502 LIGHTSPEED, and the same physical button layout, so the slot-to-button
-/// mapping mirrors [`G502_LIGHTSPEED`]. Stock DPI presets were not measured on
-/// this hardware and stay empty; the DPI cycle falls back to user-configured
-/// presets.
+/// mapping mirrors [`G502_LIGHTSPEED`]. Stock DPI levels are the factory profile
+/// 1 read from `0x8100` ROM sector `0x0101` on real hardware (firmware U1 27.03).
 pub const G502_HERO: GamingLayout = GamingLayout {
     model_keys: &["0c08b"],
     slots: &[
@@ -109,7 +108,7 @@ pub const G502_HERO: GamingLayout = GamingLayout {
         Slot::silent(ButtonId::WheelTiltRight),
         Slot::silent(ButtonId::WheelTiltLeft),
     ],
-    stock_dpi_presets: &[],
+    stock_dpi_presets: &[1200, 2400, 3200, 6400],
 };
 
 /// A gaming mouse whose layout nobody has dumped. Its first five slots are
@@ -280,6 +279,7 @@ mod tests {
         assert_eq!(G502_HERO.slot_of(ButtonId::G6), Some(5));
         assert!(G502_HERO.needs_host_mode(ButtonId::G6));
         assert!(!G502_HERO.needs_host_mode(ButtonId::Back));
+        assert_eq!(G502_HERO.stock_dpi_presets, [1200, 2400, 3200, 6400]);
     }
 
     #[test]

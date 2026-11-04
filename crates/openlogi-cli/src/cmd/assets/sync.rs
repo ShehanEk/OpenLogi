@@ -39,7 +39,10 @@ fn is_optional_asset(name: &str) -> bool {
     let basename = name.rsplit('/').next().unwrap_or(name);
     if basename == "side_core.png"
         || basename == "side.png"
-        || (basename.starts_with("side_") && basename.ends_with(".png"))
+        || (basename.starts_with("side_")
+            && std::path::Path::new(basename)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("png")))
     {
         return true;
     }

@@ -114,6 +114,30 @@ fn representative_smartshift_status() -> SmartShiftStatus {
     }
 }
 
+/// `Rgb` serializes as the same hex string the field used to hold raw, so the
+/// color bytes are identical to the pre-newtype encoding.
+#[test]
+fn lighting_wire_format() {
+    assert_wire(
+        &Lighting {
+            enabled: true,
+            color: "8000ff".parse().expect("valid hex"),
+            brightness: 80,
+            logo_color: None,
+        },
+        "01063830303066665000",
+    );
+    assert_wire(
+        &Lighting {
+            enabled: true,
+            color: "8000ff".parse().expect("valid hex"),
+            brightness: 80,
+            logo_color: Some("00ff80".parse().expect("valid hex")),
+        },
+        "0106383030306666500106303066663830",
+    );
+}
+
 /// Pins the version, so the bump that a release's first wire change makes shows
 /// in the same diff as its goldens. Later changes before that release join the
 /// unreleased version and leave this pin alone (`crates/openlogi-ipc/AGENTS.md`).
@@ -1085,27 +1109,6 @@ fn device_settings_payloads() {
     // is exactly the kind of thing a refactor would "fix".
     let smartshift: Result<SmartShiftStatus, WriteError> = Ok(representative_smartshift_status());
     assert_wire(&smartshift, "0001103c");
-
-    // `Rgb` serializes as the same hex string the field used to hold raw, so
-    // the pinned bytes are identical to the pre-newtype encoding.
-    assert_wire(
-        &Lighting {
-            enabled: true,
-            color: "8000ff".parse().expect("valid hex"),
-            brightness: 80,
-            logo_color: None,
-        },
-        "01063830303066665000",
-    );
-    assert_wire(
-        &Lighting {
-            enabled: true,
-            color: "8000ff".parse().expect("valid hex"),
-            brightness: 80,
-            logo_color: Some("00ff80".parse().expect("valid hex")),
-        },
-        "0106383030306666500106303066663830",
-    );
 
     assert_wire(
         &ReceiverSelector::BoltUid("F00DCAFE".into()),

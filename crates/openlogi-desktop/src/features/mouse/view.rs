@@ -27,7 +27,7 @@ use super::inspector::{
     binding_inspector,
 };
 use super::leader_lines::{Geometry as LeaderGeometry, Label, paint as paint_leader_lines};
-use crate::app::{glow_canvas, keyboard_glow};
+use crate::app::{glow_canvas, keyboard_glow, mouse_lights};
 use crate::features::binding_editor::{Recording, RecordsShortcut, ShortcutRecorder};
 use crate::features::keyboard::editors::{PowerUserKind, text_editor_placeholder};
 use crate::features::profiles::{profile_canvas_status, profile_name};
@@ -97,6 +97,7 @@ struct MouseWorkspaceData<'a> {
     bindings: &'a BTreeMap<ButtonId, Action>,
     gesture_maps: &'a BTreeMap<ButtonId, BTreeMap<GestureDirection, Action>>,
     glow: Option<(Arc<GlowGeometry>, Hsla)>,
+    lights: Vec<(Arc<GlowGeometry>, Hsla)>,
     thumbwheel: bool,
     dpi_gestures: bool,
     virtual_thumbwheel: bool,
@@ -124,6 +125,10 @@ impl<'a> MouseWorkspaceData<'a> {
             glow: state
                 .current_record()
                 .and_then(|record| keyboard_glow(state, record)),
+            lights: state
+                .current_record()
+                .map(|record| mouse_lights(state, record))
+                .unwrap_or_default(),
             thumbwheel: state
                 .current_record()
                 .and_then(|record| record.capabilities)
@@ -170,6 +175,7 @@ impl<'a> MouseWorkspaceData<'a> {
             bindings: &NO_BINDINGS,
             gesture_maps: &NO_GESTURE_MAPS,
             glow: None,
+            lights: Vec::new(),
             thumbwheel: false,
             dpi_gestures: false,
             virtual_thumbwheel: false,
@@ -526,6 +532,7 @@ impl Render for MouseModelView {
             bindings,
             gesture_maps,
             glow,
+            lights,
             thumbwheel,
             dpi_gestures,
             virtual_thumbwheel,
@@ -566,7 +573,7 @@ impl Render for MouseModelView {
         let hotspots_outer = hotspots.clone();
         let labels_outer = labels.clone();
         let leader_canvas = leader_canvas(hotspots, labels, highlight, mouse_left, mouse_w);
-        let breathing_art = breathing_art(asset, mouse_left, mouse_w, mouse_h, glow);
+        let breathing_art = breathing_art(asset, mouse_left, mouse_w, mouse_h, glow, lights);
         let model = ModelRect {
             left: mouse_left,
             width: mouse_w,
@@ -898,21 +905,21 @@ fn breathing_art(
     mouse_w: f32,
     mouse_h: f32,
     glow: Option<(Arc<GlowGeometry>, Hsla)>,
+    lights: Vec<(Arc<GlowGeometry>, Hsla)>,
 ) -> impl IntoElement {
+    // The lights belong to the front render, which sits right of any side view.
+    let side_w = asset.map_or(0., |a| side_view_width(a, mouse_h));
     let device_art: AnyElement = match asset {
-        Some(a) => {
-            let side_w = side_view_width(a, mouse_h);
-            h_flex()
-                .when_some(a.side_view.as_ref(), |this, side| {
-                    this.child(img(side.image_path.clone()).w(px(side_w)).h(px(mouse_h)))
-                })
-                .child(
-                    img(a.image_path.clone())
-                        .w(px(mouse_w - side_w))
-                        .h(px(mouse_h)),
-                )
-                .into_any_element()
-        }
+        Some(a) => h_flex()
+            .when_some(a.side_view.as_ref(), |this, side| {
+                this.child(img(side.image_path.clone()).w(px(side_w)).h(px(mouse_h)))
+            })
+            .child(
+                img(a.image_path.clone())
+                    .w(px(mouse_w - side_w))
+                    .h(px(mouse_h)),
+            )
+            .into_any_element(),
         None => Silhouette {
             w: mouse_w,
             h: mouse_h,
@@ -932,6 +939,19 @@ fn breathing_art(
         .when_some(glow, |this, (geom, color)| {
             this.child(glow_canvas(geom, color))
         })
+        .child(
+            div()
+                .absolute()
+                .left(px(side_w))
+                .top(px(0.))
+                .w(px(mouse_w - side_w))
+                .h(px(mouse_h))
+                .children(
+                    lights
+                        .into_iter()
+                        .map(|(geom, color)| glow_canvas(geom, color)),
+                ),
+        )
         .child(device_art)
 }
 

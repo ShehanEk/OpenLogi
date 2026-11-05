@@ -43,7 +43,7 @@ mod widgets;
 // The mouse diagram paints the same keyboard-lighting glow as the Home
 // gallery card, so it reaches these through the crate-stable `crate::app::…`
 // path rather than the internal `app::home` submodule.
-pub(crate) use home::{glow_canvas, keyboard_glow};
+pub(crate) use home::{glow_canvas, keyboard_glow, mouse_lights};
 /// Which screen the root view is showing.
 ///
 /// GPUI has no router, so navigation is a tiny view-local enum that selects

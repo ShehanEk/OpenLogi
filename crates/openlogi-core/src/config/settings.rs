@@ -769,6 +769,14 @@ pub struct LightSettings {
     pub color: Option<Rgb>,
 }
 
+impl Lighting {
+    /// The color the logo zone shows: its own, or [`Self::color`] until it has one.
+    #[must_use]
+    pub fn logo_color_or_main(&self) -> Rgb {
+        self.logo_color.unwrap_or(self.color)
+    }
+}
+
 const fn default_light_brightness() -> u8 {
     100
 }

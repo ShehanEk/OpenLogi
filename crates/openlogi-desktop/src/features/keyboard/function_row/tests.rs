@@ -354,6 +354,7 @@ fn control_slots_read_row_by_row_and_name_unknown_controls_by_number() {
 fn control_slots_dedupe_repeats_and_skip_easy_switch() {
     let mut asset = asset_with_controls(&[(0x010a, 53.5, 13.8), (0x010a, 53.5, 13.8)]);
     asset.metadata.images.push(ImageEntry {
+        zones: Vec::new(),
         key: "device_easyswitch_image".to_string(),
         origin: Origin {
             width: 1872,
@@ -378,6 +379,7 @@ fn control_slots_dedupe_repeats_and_skip_easy_switch() {
 fn control_slots_dedupe_across_image_groups_keeping_the_keys_image_position() {
     let mut asset = asset_with_controls(&[(0x010a, 53.5, 13.8), (0x0141, 30.0, 13.8)]);
     asset.metadata.images.push(ImageEntry {
+        zones: Vec::new(),
         key: "device_buttons_image".to_string(),
         origin: Origin {
             width: 1872,
@@ -634,6 +636,7 @@ fn legacy_asset(
         glow: None,
         metadata: Metadata {
             images: vec![ImageEntry {
+                zones: Vec::new(),
                 key: "device_image".to_string(),
                 origin: Origin {
                     width: origin.0,
@@ -669,6 +672,7 @@ fn asset_with_controls(controls: &[(u16, f32, f32)]) -> ResolvedAsset {
         glow: None,
         metadata: Metadata {
             images: vec![ImageEntry {
+                zones: Vec::new(),
                 key: "device_keys_image".to_string(),
                 origin: Origin {
                     width: 1872,
@@ -720,6 +724,7 @@ fn keypad_marker_asset() -> ResolvedAsset {
         glow: None,
         metadata: Metadata {
             images: vec![ImageEntry {
+                zones: Vec::new(),
                 key: "device_keys_image".to_string(),
                 origin: Origin {
                     width: 935,

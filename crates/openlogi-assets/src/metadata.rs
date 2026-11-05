@@ -56,6 +56,71 @@ pub struct ImageEntry {
     pub origin: Origin,
     #[serde(default)]
     pub assignments: Vec<Assignment>,
+    /// The device's lights on this image. Depots disagree on the shape, so one
+    /// that does not parse means no zones rather than a failed file.
+    #[serde(default, deserialize_with = "soft_zones")]
+    pub zones: Vec<Zone>,
+}
+
+/// One named light on a device image, such as `ZONE_BRANDING`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Zone {
+    pub id: String,
+    #[serde(default)]
+    components: Vec<ZoneComponent>,
+}
+
+impl Zone {
+    /// The rectangles this light covers, in the image's origin pixels.
+    pub fn rects(&self) -> impl Iterator<Item = ZoneRect> + '_ {
+        self.components
+            .iter()
+            .flat_map(|component| &component.renderings)
+            .filter_map(|rendering| rendering.rect)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+struct ZoneComponent {
+    #[serde(default)]
+    renderings: Vec<ZoneRendering>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+struct ZoneRendering {
+    #[serde(default)]
+    rect: Option<ZoneRect>,
+}
+
+/// A rectangle in an image's origin pixels. Depots write the numbers as strings.
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
+pub struct ZoneRect {
+    #[serde(deserialize_with = "zone_coordinate")]
+    pub x: f32,
+    #[serde(deserialize_with = "zone_coordinate")]
+    pub y: f32,
+    #[serde(deserialize_with = "zone_coordinate")]
+    pub width: f32,
+    #[serde(deserialize_with = "zone_coordinate")]
+    pub height: f32,
+}
+
+fn soft_zones<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Vec<Zone>, D::Error> {
+    let zones = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(zones).unwrap_or_default())
+}
+
+fn zone_coordinate<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<f32, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Coordinate {
+        Number(f32),
+        Text(String),
+    }
+    match Coordinate::deserialize(deserializer)? {
+        Coordinate::Number(value) => Ok(value),
+        Coordinate::Text(text) => text.parse().map_err(serde::de::Error::custom),
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -164,7 +229,34 @@ impl Metadata {
 
 #[cfg(test)]
 mod tests {
-    use super::Metadata;
+    use super::{Metadata, ZoneRect};
+
+    #[test]
+    fn light_zones_read_their_string_coordinates() {
+        let json = r#"{"images":[{"key":"device_image","origin":{"width":1391,"height":2700},
+            "zones":[{"id":"ZONE_BRANDING","components":[{"renderings":[{"type":"rect",
+            "rect":{"x":"405","y":"1760","width":"300","height":"300"}}]}]}]}]}"#;
+        let meta: Metadata = serde_json::from_str(json).expect("parses");
+        let zone = &meta.images[0].zones[0];
+        assert_eq!(zone.id, "ZONE_BRANDING");
+        assert_eq!(
+            zone.rects().collect::<Vec<_>>(),
+            [ZoneRect {
+                x: 405.,
+                y: 1760.,
+                width: 300.,
+                height: 300.
+            }]
+        );
+    }
+
+    #[test]
+    fn zones_of_another_shape_do_not_fail_the_file() {
+        let json = r#"{"images":[{"key":"device_image","origin":{"width":1,"height":1},
+            "zones":[{"name":"no id here"}]}]}"#;
+        let meta: Metadata = serde_json::from_str(json).expect("parses");
+        assert!(meta.images[0].zones.is_empty());
+    }
 
     /// Older keyboard depots (G513) identify assignments by `slotId` only —
     /// no `slotName` — and add fields like `assignmentOffset`. Parsing must

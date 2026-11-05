@@ -918,6 +918,7 @@ mod tests {
             metadata: Metadata {
                 images: vec![
                     ImageEntry {
+                        zones: Vec::new(),
                         key: "device_image".to_string(),
                         origin: Origin {
                             width: origin.0,
@@ -926,6 +927,7 @@ mod tests {
                         assignments: Vec::new(),
                     },
                     ImageEntry {
+                        zones: Vec::new(),
                         key: "device_buttons_image".to_string(),
                         origin: Origin {
                             width: origin.0,

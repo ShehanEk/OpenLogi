@@ -20,8 +20,8 @@ use openlogi_core::device::DeviceKind;
 
 use super::{
     AppView, Connectivity, battery_reading, connection_summary, connection_view,
-    custom_model_subtitle, device_card, device_image, device_menu, device_menu_button, device_ring,
-    keyboard_glow, kind_badge,
+    custom_model_subtitle, device_card, device_image, device_lights, device_menu,
+    device_menu_button, device_ring, kind_badge,
 };
 use crate::app::widgets::agent_live;
 use crate::state::{AppState, DeviceRecord};
@@ -273,14 +273,14 @@ fn device_card_element(
     let light_enabled =
         record.kind == DeviceKind::Light && state.light_enabled_for(&record.device_key());
     let light_settings = state.light_for(&record.device_key());
-    let glow = keyboard_glow(state, record);
+    let lights = device_lights(state, record);
 
     device_card(
         record,
         connectivity,
         state.offline_connection(record),
         enabled,
-        glow,
+        lights,
         light_enabled,
         light_settings,
         pal,
@@ -299,6 +299,31 @@ fn device_card_element(
     })
 }
 
+/// A list row's image box, with `lights` painted behind whatever image it gets.
+fn list_row_image(
+    record: &DeviceRecord,
+    lights: Vec<(
+        std::sync::Arc<crate::services::assets::GlowGeometry>,
+        gpui::Hsla,
+    )>,
+) -> gpui::Div {
+    div()
+        .relative()
+        .w(px(120.))
+        .h(px(68.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .overflow_hidden()
+        .opacity(if record.online { 1. } else { 0.38 })
+        .children(
+            lights
+                .into_iter()
+                .map(|(geom, color)| super::glow_canvas(geom, color)),
+        )
+}
+
 fn device_list_row(
     state: &AppState,
     idx: usize,
@@ -313,7 +338,12 @@ fn device_list_row(
     let light_enabled =
         record.kind == DeviceKind::Light && state.light_enabled_for(&record.device_key());
     let light_settings = state.light_for(&record.device_key());
-    let glow = keyboard_glow(state, record);
+    let image = list_row_image(record, device_lights(state, record)).child(device_image(
+        record,
+        light_enabled,
+        light_settings,
+        pal,
+    ));
     let record_key = record.record_key();
 
     BaseButton::new((ElementId::from("device-list-row"), record_key.clone()))
@@ -329,22 +359,7 @@ fn device_list_row(
         .border_color(device_ring(enabled))
         .bg(pal.panel)
         .shadow_xs()
-        .child(
-            div()
-                .relative()
-                .w(px(120.))
-                .h(px(68.))
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
-                .overflow_hidden()
-                .opacity(if record.online { 1. } else { 0.38 })
-                .when_some(glow, |this, (geom, color)| {
-                    this.child(super::glow_canvas(geom, color))
-                })
-                .child(device_image(record, light_enabled, light_settings, pal)),
-        )
+        .child(image)
         .child(
             v_flex()
                 .flex_1()

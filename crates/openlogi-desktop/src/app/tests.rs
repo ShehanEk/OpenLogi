@@ -1467,6 +1467,97 @@ fn keyboard_with_a_depot_but_no_capabilities_shows_keys_tab() {
 
 /// Each panel is independent: a lighting-only device (e.g. a keyboard with
 /// RGB but no remappable keys yet) shows only Lighting + Device.
+/// A G502 HERO-shaped asset: the front render is the main view and matches the
+/// metadata's origin, with a logo and a DPI zone.
+fn g502_light_asset() -> crate::services::assets::ResolvedAsset {
+    let metadata = serde_json::from_str(
+        r#"{"images":[{"key":"device_image","origin":{"width":1000,"height":2000},"zones":[
+        {"id":"ZONE_BRANDING","components":[{"renderings":[{"rect":
+            {"x":"100","y":"1000","width":"200","height":"400"}}]}]},
+        {"id":"ZONE_PRIMARY","components":[{"renderings":[{"rect":
+            {"x":"500","y":"500","width":"100","height":"200"}}]}]},
+        {"id":"ZONE_OTHER","components":[{"renderings":[{"rect":
+            {"x":"0","y":"0","width":"1","height":"1"}}]}]}
+        ]}]}"#,
+    )
+    .expect("valid metadata");
+    crate::services::assets::ResolvedAsset {
+        depot: "g502_hero".into(),
+        display_name: "G502 HERO".into(),
+        kind: Some(DeviceKind::Mouse),
+        image_path: "front.png".into(),
+        hero_image_path: Some("front.png".into()),
+        glow: None,
+        metadata,
+        png_width: 1000,
+        png_height: 2000,
+        side_view: None,
+    }
+}
+
+#[test]
+fn each_mouse_light_is_painted_in_its_own_color_at_its_place() {
+    let main = openlogi_core::color::Rgb::new(0xff, 0, 0);
+    let logo = openlogi_core::color::Rgb::new(0, 0, 0xff);
+    let lighting = openlogi_core::config::Lighting {
+        color: main,
+        logo_color: Some(logo),
+        ..Default::default()
+    };
+
+    let zones = super::home::light_zones(&g502_light_asset(), &lighting);
+
+    assert_eq!(zones.len(), 2, "only the zones with a known light");
+    let (logo_zone, logo_color) = &zones[0];
+    assert_eq!(logo_zone.aspect, 0.5);
+    assert_eq!(
+        logo_zone.segments,
+        [crate::services::assets::GlowSeg {
+            x: 0.1,
+            y: 0.5,
+            w: 0.2,
+            h: 0.2
+        }]
+    );
+    assert_eq!(*logo_color, super::home::light_hsla(logo, 1.));
+    assert_eq!(zones[1].1, super::home::light_hsla(main, 1.));
+}
+
+#[test]
+fn a_logo_without_its_own_color_shows_the_main_one() {
+    let main = openlogi_core::color::Rgb::new(0xff, 0, 0);
+    let lighting = openlogi_core::config::Lighting {
+        color: main,
+        ..Default::default()
+    };
+    let zones = super::home::light_zones(&g502_light_asset(), &lighting);
+    assert_eq!(zones[0].1, super::home::light_hsla(main, 1.));
+}
+
+#[test]
+fn switched_off_mouse_lights_are_painted_dark() {
+    let lighting = openlogi_core::config::Lighting {
+        enabled: false,
+        logo_color: Some(openlogi_core::color::Rgb::new(0, 0, 0xff)),
+        ..Default::default()
+    };
+    let zones = super::home::light_zones(&g502_light_asset(), &lighting);
+    assert!(
+        zones
+            .iter()
+            .all(|(_, color)| *color == super::home::light_hsla(super::home::LIGHT_OFF, 1.))
+    );
+}
+
+#[test]
+fn zones_are_not_placed_on_a_render_of_another_size() {
+    let mut asset = g502_light_asset();
+    asset.png_width = 687;
+    assert!(
+        super::home::light_zones(&asset, &openlogi_core::config::Lighting::default()).is_empty()
+    );
+}
+
 #[test]
 fn lighting_only_device_shows_only_lighting() {
     let caps = Some(Capabilities {

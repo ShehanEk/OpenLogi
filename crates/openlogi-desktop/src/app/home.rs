@@ -26,7 +26,8 @@ use gpui_kit::component::{
     tooltip::Tooltip,
     v_flex,
 };
-use openlogi_core::config::{DeviceViewMode, LightSettings};
+use openlogi_core::color::Rgb;
+use openlogi_core::config::{DeviceViewMode, LightSettings, Lighting};
 use openlogi_core::device::{DeviceKind, DeviceModelInfo, ModelTransport};
 use openlogi_core::hid::{DeviceRoute, ReceiverBrand, ReceiverProtocol};
 use openlogi_ipc::PairingFailure;
@@ -38,7 +39,7 @@ use super::widgets::{
     receiver_slot_label, settings_button,
 };
 use crate::features::lighting::visual as light_visual;
-use crate::services::assets::GlowGeometry;
+use crate::services::assets::{GlowGeometry, GlowSeg, ResolvedAsset};
 use crate::services::ipc::UnpairFailure;
 use crate::state::{AppState, DeviceRecord, ObservedConnection};
 use crate::ui::battery::{BatteryIndicator, glance_hint};
@@ -106,14 +107,98 @@ pub(crate) fn keyboard_glow(
         .lighting_for(&record.config_key, &record.route_key)
         .filter(|l| l.enabled)?;
     let geom = record.asset.as_ref()?.glow.clone()?;
-    let (r, g, b) = lighting.color.components();
-    let color = gpui::Rgba {
+    Some((geom, light_hsla(lighting.color, GLOW_OPACITY)))
+}
+
+pub(super) fn light_hsla(color: Rgb, opacity: f32) -> Hsla {
+    let (r, g, b) = color.components();
+    gpui::Rgba {
         r: f32::from(r) / 255.,
         g: f32::from(g) / 255.,
         b: f32::from(b) / 255.,
-        a: GLOW_OPACITY,
+        a: opacity,
+    }
+    .into()
+}
+
+/// Everything to paint behind `record`'s image in its gallery entry: a
+/// keyboard's glow, or a mouse's lights.
+fn device_lights(state: &AppState, record: &DeviceRecord) -> Vec<(Arc<GlowGeometry>, Hsla)> {
+    keyboard_glow(state, record)
+        .into_iter()
+        .chain(mouse_lights(state, record))
+        .collect()
+}
+
+/// What a mouse's light cutouts show while its lighting is switched off.
+pub(super) const LIGHT_OFF: Rgb = Rgb::new(0x1a, 0x1a, 0x1a);
+
+/// Each light of a mouse with saved lighting, ready for [`glow_canvas`] to paint
+/// behind its render: the render's lights are transparent cutouts, so only their
+/// shapes take the colour. Empty until the user has set a colour, and for a
+/// depot that ships no light zones.
+pub(crate) fn mouse_lights(
+    state: &AppState,
+    record: &DeviceRecord,
+) -> Vec<(Arc<GlowGeometry>, Hsla)> {
+    if record.kind != DeviceKind::Mouse {
+        return Vec::new();
+    }
+    let lighting = state.lighting_for(&record.config_key, &record.route_key);
+    match (lighting, record.asset.as_ref()) {
+        (Some(lighting), Some(asset)) => light_zones(asset, &lighting),
+        _ => Vec::new(),
+    }
+}
+
+/// The zones of `asset`'s front render in `lighting`'s colours. The zones are in
+/// the metadata's origin pixels, which only locate them on a render of that size.
+pub(super) fn light_zones(
+    asset: &ResolvedAsset,
+    lighting: &Lighting,
+) -> Vec<(Arc<GlowGeometry>, Hsla)> {
+    let Some(image) = asset.metadata.image("device_image") else {
+        return Vec::new();
     };
-    Some((geom, color.into()))
+    let (width, height) = (image.origin.width, image.origin.height);
+    if asset.hero_image_path.as_ref() != Some(&asset.image_path)
+        || (asset.png_width, asset.png_height) != (width, height)
+        || width == 0
+        || height == 0
+    {
+        return Vec::new();
+    }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "render dimensions are a few thousand pixels"
+    )]
+    let (width, height) = (width as f32, height as f32);
+    image
+        .zones
+        .iter()
+        .filter_map(|zone| {
+            let color = match zone.id.as_str() {
+                "ZONE_BRANDING" => lighting.logo_color_or_main(),
+                "ZONE_PRIMARY" => lighting.color,
+                _ => return None,
+            };
+            let color = if lighting.enabled { color } else { LIGHT_OFF };
+            let segments = zone
+                .rects()
+                .map(|rect| GlowSeg {
+                    x: rect.x / width,
+                    y: rect.y / height,
+                    w: rect.width / width,
+                    h: rect.height / height,
+                })
+                .collect();
+            let geometry = GlowGeometry {
+                aspect: width / height,
+                segments,
+            };
+            Some((Arc::new(geometry), light_hsla(color, 1.)))
+        })
+        .collect()
 }
 
 /// Paint a keyboard's baked inter-key holes in its lighting colour, scaled with
@@ -169,7 +254,7 @@ fn device_card(
     connectivity: Connectivity,
     saved_transport: Option<ObservedConnection>,
     enabled: bool,
-    glow: Option<(Arc<GlowGeometry>, Hsla)>,
+    lights: Vec<(Arc<GlowGeometry>, Hsla)>,
     light_enabled: bool,
     light_settings: LightSettings,
     pal: Palette,
@@ -204,9 +289,11 @@ fn device_card(
                         // without generating a second asset that edits the
                         // manufacturer's artwork.
                         .opacity(if record.online { 1. } else { 0.38 })
-                        .when_some(glow, |this, (geom, color)| {
-                            this.child(glow_canvas(geom, color))
-                        })
+                        .children(
+                            lights
+                                .into_iter()
+                                .map(|(geom, color)| glow_canvas(geom, color)),
+                        )
                         .child(device_image(record, light_enabled, light_settings, pal)),
                 )
                 // Outside the dimmed render, so an offline card's status

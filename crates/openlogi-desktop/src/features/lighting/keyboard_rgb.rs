@@ -168,7 +168,7 @@ impl Zone {
     fn color(self, lighting: &Lighting) -> Rgb {
         match self {
             Self::Main => lighting.color,
-            Self::Logo => lighting.logo_color.unwrap_or(lighting.color),
+            Self::Logo => lighting.logo_color_or_main(),
         }
     }
 

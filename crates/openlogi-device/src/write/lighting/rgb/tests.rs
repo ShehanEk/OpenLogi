@@ -16,6 +16,7 @@ fn write() -> LightingWrite {
     LightingWrite {
         method: LightingMethod::Auto,
         color: Rgb::new(0x17, 0x82, 0xc4),
+        logo_color: None,
     }
 }
 

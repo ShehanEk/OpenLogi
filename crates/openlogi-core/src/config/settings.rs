@@ -732,6 +732,11 @@ pub struct Lighting {
         deserialize_with = "deserialize_brightness"
     )]
     pub brightness: u8,
+    /// The logo zone's own color, for a device that reports one. `None` keeps
+    /// the logo on [`Self::color`]. Never `skip_serializing_if`: the IPC
+    /// encoding is positional.
+    #[serde(default, deserialize_with = "deserialize_optional_lighting_color")]
+    pub logo_color: Option<Rgb>,
 }
 
 /// Persisted settings for a standalone light such as Logitech Litra.
@@ -821,6 +826,7 @@ impl Default for Lighting {
             enabled: default_lighting_enabled(),
             color: default_lighting_color(),
             brightness: default_lighting_brightness(),
+            logo_color: None,
         }
     }
 }
@@ -859,11 +865,24 @@ where
     D: serde::Deserializer<'de>,
 {
     let color = String::deserialize(deserializer)?;
+    parse_lighting_color(&color)
+}
+
+fn deserialize_optional_lighting_color<'de, D>(deserializer: D) -> Result<Option<Rgb>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)?
+        .map(|color| parse_lighting_color(&color))
+        .transpose()
+}
+
+fn parse_lighting_color<E: serde::de::Error>(color: &str) -> Result<Rgb, E> {
     color
         .strip_prefix('#')
-        .unwrap_or(color.as_str())
+        .unwrap_or(color)
         .parse()
-        .map_err(serde::de::Error::custom)
+        .map_err(E::custom)
 }
 
 /// Per-webcam UVC controls, keyed by control name (`brightness`, `focus`,

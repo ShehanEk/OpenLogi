@@ -7,8 +7,8 @@
 
 use crate::ui::theme::FocusRingStyle as _;
 use gpui::{
-    Context, InteractiveElement, IntoElement, ParentElement, Render, Role,
-    StatefulInteractiveElement as _, Styled, Subscription, Toggled, Window, px, rgb,
+    Context, Div, InteractiveElement, IntoElement, ParentElement, Render, Role, SharedString,
+    StatefulInteractiveElement as _, Styled, Subscription, Toggled, Window, div, px, rgb,
 };
 use gpui_kit::base::Button as BaseButton;
 use gpui_kit::component::{Selectable as _, h_flex, slider::Slider, v_flex};
@@ -81,10 +81,31 @@ impl Render for LightingPanel {
         // disturbing an in-progress drag.
         self.brightness.sync(lighting.brightness, window, cx);
 
-        let swatches: Vec<_> = PALETTE
-            .iter()
-            .map(|&color| swatch(color, &lighting, pal))
-            .collect();
+        let has_logo = AppState::try_read(cx).is_some_and(AppState::has_logo_light);
+        let swatches = |zone| {
+            h_flex().gap_2().flex_wrap().children(
+                PALETTE
+                    .iter()
+                    .map(|&color| swatch(color, zone, &lighting, pal))
+                    .collect::<Vec<_>>(),
+            )
+        };
+        let colors = if has_logo {
+            v_flex()
+                .gap_3()
+                .child(labeled_row(
+                    tr!("lighting.main_light"),
+                    swatches(Zone::Main),
+                    pal,
+                ))
+                .child(labeled_row(
+                    tr!("lighting.logo_light"),
+                    swatches(Zone::Logo),
+                    pal,
+                ))
+        } else {
+            v_flex().child(swatches(Zone::Main))
+        };
 
         v_flex()
             .gap_3()
@@ -106,7 +127,7 @@ impl Render for LightingPanel {
                         });
                     }),
             ))
-            .child(h_flex().gap_2().flex_wrap().children(swatches))
+            .child(colors)
             .child(
                 SliderRow::new(
                     tr!("camera.brightness"),
@@ -120,17 +141,65 @@ impl Render for LightingPanel {
     }
 }
 
-/// One color swatch. Clicking it turns lighting on and sets that color.
-fn swatch(color: Rgb, current: &Lighting, pal: Palette) -> impl IntoElement {
-    let selected = current.enabled && current.color == color;
-    BaseButton::new(("light-swatch", color.packed()))
+/// The light a swatch row colors.
+#[derive(Clone, Copy)]
+enum Zone {
+    Main,
+    Logo,
+}
+
+impl Zone {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Main => "light-swatch",
+            Self::Logo => "logo-swatch",
+        }
+    }
+
+    fn name(self) -> SharedString {
+        match self {
+            Self::Main => tr!("device.lighting"),
+            Self::Logo => tr!("lighting.logo_light"),
+        }
+    }
+
+    /// The color this zone shows: the logo follows the main color until it has
+    /// its own.
+    fn color(self, lighting: &Lighting) -> Rgb {
+        match self {
+            Self::Main => lighting.color,
+            Self::Logo => lighting.logo_color.unwrap_or(lighting.color),
+        }
+    }
+
+    fn set(self, lighting: &mut Lighting, color: Rgb) {
+        match self {
+            Self::Main => lighting.color = color,
+            Self::Logo => lighting.logo_color = Some(color),
+        }
+    }
+}
+
+/// A swatch row under the name of the light it colors.
+fn labeled_row(label: impl Into<SharedString>, row: impl IntoElement, pal: Palette) -> Div {
+    v_flex()
+        .gap_1p5()
+        .child(
+            div()
+                .text_sm()
+                .text_color(pal.text_muted)
+                .child(label.into()),
+        )
+        .child(row)
+}
+
+/// One color swatch. Clicking it turns lighting on and sets `zone` to that color.
+fn swatch(color: Rgb, zone: Zone, current: &Lighting, pal: Palette) -> impl IntoElement {
+    let selected = current.enabled && zone.color(current) == color;
+    BaseButton::new((zone.id(), color.packed()))
         .role(Role::RadioButton)
         .selected(selected)
-        .accessibility_label(format!(
-            "{} #{:06X}",
-            tr!("device.lighting"),
-            color.packed()
-        ))
+        .accessibility_label(format!("{} #{:06X}", zone.name(), color.packed()))
         .aria_toggled(if selected {
             Toggled::True
         } else {
@@ -152,7 +221,7 @@ fn swatch(color: Rgb, current: &Lighting, pal: Palette) -> impl IntoElement {
             AppState::apply(cx, |state| {
                 let mut next = state.lighting();
                 next.enabled = true;
-                next.color = color;
+                zone.set(&mut next, color);
                 state.commit_lighting(next)
             });
         })

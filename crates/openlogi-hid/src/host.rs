@@ -219,6 +219,7 @@ pub async fn set_keyboard_color_with(
         device::LightingWrite {
             method,
             color: openlogi_core::color::Rgb::new(r, g, b),
+            logo_color: None,
         }
         .apply(
             &*native_backend(),
@@ -264,6 +265,13 @@ pub async fn watch_litra(
     model: LitraModel,
 ) -> Result<Option<LightWatch>, WriteError> {
     device::watch_litra(&*native_backend(), route, model).await
+}
+
+/// Read the `0x8070` lighting zones of the device `route` reaches.
+pub async fn read_lighting_zones(
+    route: &DeviceRoute,
+) -> Result<Vec<device::LightingZone>, WriteError> {
+    device::read_lighting_zones(&*native_backend(), route).await
 }
 
 /// Walk the HID++ feature table of the device `route` reaches.

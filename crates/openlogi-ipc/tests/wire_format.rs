@@ -119,7 +119,7 @@ fn representative_smartshift_status() -> SmartShiftStatus {
 /// unreleased version and leave this pin alone (`crates/openlogi-ipc/AGENTS.md`).
 #[test]
 fn protocol_version_is_pinned() {
-    assert_eq!(PROTOCOL_VERSION, 45);
+    assert_eq!(PROTOCOL_VERSION, 46);
 }
 
 #[test]
@@ -1093,8 +1093,18 @@ fn device_settings_payloads() {
             enabled: true,
             color: "8000ff".parse().expect("valid hex"),
             brightness: 80,
+            logo_color: None,
         },
-        "010638303030666650",
+        "01063830303066665000",
+    );
+    assert_wire(
+        &Lighting {
+            enabled: true,
+            color: "8000ff".parse().expect("valid hex"),
+            brightness: 80,
+            logo_color: Some("00ff80".parse().expect("valid hex")),
+        },
+        "0106383030306666500106303066663830",
     );
 
     assert_wire(

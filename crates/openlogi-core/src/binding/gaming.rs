@@ -62,6 +62,9 @@ pub struct GamingLayout {
     pub slots: &'static [Slot],
     /// Stock DPI levels, used until the user sets presets.
     pub stock_dpi_presets: &'static [u16],
+    /// Whether the model has a logo light with its own `0x8070` zone, so the
+    /// lighting panel offers it a color.
+    pub logo_light: bool,
 }
 
 /// G502 LIGHTSPEED (wpid `0x407f`).
@@ -82,6 +85,7 @@ pub const G502_LIGHTSPEED: GamingLayout = GamingLayout {
         Slot::silent(ButtonId::WheelTiltLeft),
     ],
     stock_dpi_presets: &[400, 800, 1600, 3200, 6400],
+    logo_light: false,
 };
 
 /// G502 HERO (wired, model key `0c08b`).
@@ -109,6 +113,7 @@ pub const G502_HERO: GamingLayout = GamingLayout {
         Slot::silent(ButtonId::WheelTiltLeft),
     ],
     stock_dpi_presets: &[1200, 2400, 3200, 6400],
+    logo_light: true,
 };
 
 /// A gaming mouse whose layout nobody has dumped. Its first five slots are
@@ -127,6 +132,7 @@ pub const STANDARD_BUTTONS: GamingLayout = GamingLayout {
         Slot::native(ButtonId::Forward),
     ],
     stock_dpi_presets: &[],
+    logo_light: false,
 };
 
 const LAYOUTS: &[&GamingLayout] = &[&G502_LIGHTSPEED, &G502_HERO];

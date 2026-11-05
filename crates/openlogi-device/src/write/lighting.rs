@@ -7,7 +7,7 @@ use hidpp::{
     feature::{
         CreatableFeature,
         color_led_effects::{
-            ColorLedEffectsFeature, EffectId, Persistence, ZONE_EFFECT_PARAM_COUNT,
+            ColorLedEffectsFeature, EffectId, LocationEffect, Persistence, ZONE_EFFECT_PARAM_COUNT,
         },
         per_key_lighting::{
             FramePersistence, MAX_SINGLE_VALUE_ZONES, PerKeyLightingFeature, Rgb,
@@ -117,6 +117,7 @@ pub async fn set_keyboard_color_with(
     LightingWrite {
         method,
         color: openlogi_core::color::Rgb::new(r, g, b),
+        logo_color: None,
     }
     .apply(backend, route, || false, || true)
     .await
@@ -130,6 +131,9 @@ pub struct LightingWrite {
     pub method: LightingMethod,
     /// The colour after applying the configured brightness.
     pub color: openlogi_core::color::Rgb,
+    /// The logo zone's own colour on the `0x8070` path. `None` paints it
+    /// [`Self::color`]; the other paths have no logo zone to address.
+    pub logo_color: Option<openlogi_core::color::Rgb>,
 }
 
 impl LightingWrite {
@@ -193,13 +197,26 @@ impl LightingWrite {
             }
             LightingMethod::Effects => {
                 return scope
-                    .read(set_color_effects(channel, index, r, g, b))
+                    .read(set_color_effects(
+                        channel,
+                        index,
+                        self.color,
+                        self.logo_color,
+                    ))
                     .await
                     .map(|()| None);
             }
             LightingMethod::Auto => {}
         }
-        match scope.read(set_color_effects(channel, index, r, g, b)).await {
+        match scope
+            .read(set_color_effects(
+                channel,
+                index,
+                self.color,
+                self.logo_color,
+            ))
+            .await
+        {
             Err(WriteError::FeatureUnsupported { feature_hex })
                 if feature_hex == COLOR_LED_EFFECTS_FEATURE =>
             {
@@ -361,9 +378,8 @@ async fn resolve_feature_index(
 async fn set_color_effects(
     channel: &Arc<HidppChannel>,
     index: u8,
-    r: u8,
-    g: u8,
-    b: u8,
+    color: openlogi_core::color::Rgb,
+    logo_color: Option<openlogi_core::color::Rgb>,
 ) -> Result<(), WriteError> {
     let mut device = Device::new(Arc::clone(channel), index)
         .await
@@ -375,10 +391,6 @@ async fn set_color_effects(
         .map_err(classify_lighting_error)?
         .zone_count;
 
-    let mut params = [0u8; ZONE_EFFECT_PARAM_COUNT];
-    params[0] = r;
-    params[1] = g;
-    params[2] = b;
     let targets = fixed_color_targets(&feature, index, zone_count).await?;
     if targets.is_empty() {
         debug!(index, zone_count, "no 0x8070 zone offers a fixed colour");
@@ -386,7 +398,14 @@ async fn set_color_effects(
             feature_hex: COLOR_LED_EFFECTS_FEATURE,
         });
     }
-    for &(zone, effect) in &targets {
+    for &(zone, effect, location) in &targets {
+        let zone_color = match (location, logo_color) {
+            (LocationEffect::Logo, Some(logo_color)) => logo_color,
+            _ => color,
+        };
+        let (r, g, b) = zone_color.components();
+        let mut params = [0u8; ZONE_EFFECT_PARAM_COUNT];
+        params[..3].copy_from_slice(&[r, g, b]);
         feature
             .set_zone_effect(zone, effect, params, Persistence::Volatile)
             .await
@@ -397,18 +416,17 @@ async fn set_color_effects(
         index,
         zone_count,
         zones_written = targets.len(),
-        r,
-        g,
-        b,
+        ?color,
+        ?logo_color,
         "set keyboard colour via typed 0x8070"
     );
     Ok(())
 }
 
-/// The `(zone, effect index)` of the fixed-colour effect in each of zones
-/// `0..zone_count`, read from the device's own effect lists as Logi Options+
-/// does. A zone without one is skipped: a guessed index would drive whatever
-/// effect sits there with RGB bytes as its parameters.
+/// The `(zone, effect index, location)` of the fixed-colour effect in each of
+/// zones `0..zone_count`, read from the device's own effect lists as Logi
+/// Options+ does. A zone without one is skipped: a guessed index would drive
+/// whatever effect sits there with RGB bytes as its parameters.
 ///
 /// An effect id this crate does not model is not the fixed colour, so it is
 /// passed over. A zone whose info is rejected (an unmodelled location) is
@@ -418,11 +436,11 @@ async fn fixed_color_targets(
     feature: &ColorLedEffectsFeature,
     index: u8,
     zone_count: u8,
-) -> Result<Vec<(u8, u8)>, WriteError> {
+) -> Result<Vec<(u8, u8, LocationEffect)>, WriteError> {
     let mut targets = Vec::new();
     for zone in 0..zone_count {
-        let effects_number = match feature.get_zone_info(zone).await {
-            Ok(info) => info.effects_number,
+        let (location, effects_number) = match feature.get_zone_info(zone).await {
+            Ok(info) => (info.location, info.effects_number),
             Err(Hidpp20Error::UnsupportedResponse) => {
                 debug!(
                     index,
@@ -435,7 +453,7 @@ async fn fixed_color_targets(
         for effect in 0..effects_number {
             match feature.get_zone_effect_info(zone, effect).await {
                 Ok(info) if info.effect_id == EffectId::FixedColor => {
-                    targets.push((zone, effect));
+                    targets.push((zone, effect, location));
                     break;
                 }
                 Ok(_) | Err(Hidpp20Error::UnsupportedResponse) => {}
@@ -444,6 +462,49 @@ async fn fixed_color_targets(
         }
     }
     Ok(targets)
+}
+
+/// One `0x8070` zone as the device reports it. `location` is `None` when the
+/// device names a location this crate does not model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LightingZone {
+    /// The zone's index on the device.
+    pub index: u8,
+    /// The physical location the zone covers.
+    pub location: Option<LocationEffect>,
+}
+
+/// Read the `0x8070` zones of the device on `route`, without writing anything.
+pub async fn read_lighting_zones(
+    backend: &dyn HidBackend,
+    route: &DeviceRoute,
+) -> Result<Vec<LightingZone>, WriteError> {
+    let index = route.device_index();
+    with_route(backend, route, move |channel| async move {
+        let mut device = Device::new(Arc::clone(&channel), index)
+            .await
+            .map_err(|_| WriteError::DeviceUnreachable { index })?;
+        let feature = open_feature::<ColorLedEffectsFeature>(&mut device).await?;
+        let zone_count = feature
+            .get_info()
+            .await
+            .map_err(classify_lighting_error)?
+            .zone_count;
+        let mut zones = Vec::with_capacity(usize::from(zone_count));
+        for zone in 0..zone_count {
+            let location = match feature.get_zone_info(zone).await {
+                Ok(info) => Some(info.location),
+                Err(Hidpp20Error::UnsupportedResponse) => None,
+                Err(error) => return Err(classify_lighting_error(error)),
+            };
+            zones.push(LightingZone {
+                index: zone,
+                location,
+            });
+        }
+        Ok(zones)
+    })
+    .await
 }
 
 /// Classify a HID++ error from the `ColorLedEffects` functions.
@@ -732,6 +793,7 @@ pub async fn set_keyboard_color_with_on(
     LightingWrite {
         method,
         color: openlogi_core::color::Rgb::new(r, g, b),
+        logo_color: None,
     }
     .apply_on(shared, || false, || shared.channel().is_connected())
     .await

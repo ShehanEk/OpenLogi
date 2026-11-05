@@ -17,6 +17,15 @@ fn next_light_command(
 }
 
 #[test]
+fn only_a_model_with_a_logo_light_offers_it_a_color() {
+    let mut state = state_with_a_known_mouse();
+    assert!(!state.has_logo_light());
+
+    state.devices.records[0].model_key = "0c08b".to_string();
+    assert!(state.has_logo_light());
+}
+
+#[test]
 fn light_write_failure_reaches_the_gui_state() {
     let light = StandaloneDevice {
         address: RawDeviceAddress {

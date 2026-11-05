@@ -61,6 +61,27 @@ pub async fn run(args: LightingArgs) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Args)]
+pub struct LightingZonesArgs {
+    /// Run against the online device whose name contains this string
+    /// (case-insensitive). Useful when several devices are connected.
+    #[arg(long, value_name = "NAME")]
+    pub device: Option<String>,
+}
+
+/// Print each `0x8070` zone the device reports. Writes nothing.
+pub async fn run_zones(args: LightingZonesArgs) -> Result<()> {
+    let (route, name) = select_device(args.device.as_deref(), &[0x8070]).await?;
+    println!("{name} ({route})");
+    for zone in openlogi_hid::read_lighting_zones(&route).await? {
+        match zone.location {
+            Some(location) => println!("  zone {}: {location:?}", zone.index),
+            None => println!("  zone {}: unknown location", zone.index),
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod color_validation_tests {
     use openlogi_core::color::RgbParseError;

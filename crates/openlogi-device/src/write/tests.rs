@@ -1601,6 +1601,32 @@ async fn a_fixed_colour_targets_each_zones_own_fixed_effect() -> Result<(), Writ
 }
 
 #[tokio::test]
+async fn a_logo_colour_reaches_only_the_logo_zone() -> Result<(), WriteError> {
+    // The G502 HERO's zones: Primary, then Logo.
+    const ZONES: ScriptedZones = &[(0x0001, &[0x0001]), (0x0002, &[0x0001])];
+    let (shared, handle) = color_led_effects_shared(ZONES).await;
+
+    LightingWrite {
+        method: LightingMethod::Effects,
+        color: openlogi_core::color::Rgb::new(0x11, 0x22, 0x33),
+        logo_color: Some(openlogi_core::color::Rgb::new(0x44, 0x55, 0x66)),
+    }
+    .apply_on(&shared, || false, || true)
+    .await?;
+
+    let colours: Vec<_> = handle
+        .written_reports()
+        .into_iter()
+        .filter(|report| {
+            report.len() == 20 && report[2] == COLOR_LED_EFFECTS_INDEX && report[3] >> 4 == 0x03
+        })
+        .map(|report| (report[4], [report[6], report[7], report[8]]))
+        .collect();
+    assert_eq!(colours, [(0, [0x11, 0x22, 0x33]), (1, [0x44, 0x55, 0x66])]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn a_fixed_colour_reaches_every_reported_zone() -> Result<(), WriteError> {
     // Six zones, past the four the writer used to stop at. The fixed colour
     // sits at a different ordinal in each, so every write must come from that

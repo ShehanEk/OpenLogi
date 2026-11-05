@@ -1,5 +1,6 @@
 //! Per-device RGB keyboard lighting settings.
 
+use openlogi_core::binding::GamingLayout;
 use openlogi_core::config::Lighting;
 use openlogi_core::device_order::PhysicalDeviceKey;
 use tracing::debug;
@@ -18,6 +19,13 @@ impl AppState {
                 self.lighting_for(key, &record.route_key)
             })
             .unwrap_or_default()
+    }
+    /// Whether the active device has a logo light that takes its own color.
+    #[must_use]
+    pub fn has_logo_light(&self) -> bool {
+        self.current_record().is_some_and(|record| {
+            GamingLayout::for_model_key(&record.model_key).is_some_and(|layout| layout.logo_light)
+        })
     }
     /// The stored lighting config for `key` on `route_key`, or `None` when
     /// unset (or overridden to unset on that link).

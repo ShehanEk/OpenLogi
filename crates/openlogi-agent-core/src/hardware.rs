@@ -447,6 +447,8 @@ impl DeviceOp {
         let write = openlogi_hid::write::LightingWrite {
             method: openlogi_hid::LightingMethod::Auto,
             color: openlogi_core::color::Rgb::new(r, g, b),
+            logo_color: lighting_logo_rgb(lighting)
+                .map(|(r, g, b)| openlogi_core::color::Rgb::new(r, g, b)),
         };
         openlogi_hid::lighting::LightingJob::spawn(&self.route, move |cancel| async move {
             let _lease = tokio::time::timeout(WRITE_TIMEOUT, receiver_access.acquire_for_io())
@@ -1574,10 +1576,22 @@ pub fn set_lighting_in_background(op: DeviceOp, lighting: &Lighting) {
 /// colour scaled by brightness, or black when lighting is off.
 #[must_use]
 pub fn lighting_rgb(lighting: &Lighting) -> (u8, u8, u8) {
+    resolve_lighting_color(lighting, lighting.color)
+}
+
+/// [`lighting_rgb`] for the logo zone's own colour, when it has one.
+#[must_use]
+pub fn lighting_logo_rgb(lighting: &Lighting) -> Option<(u8, u8, u8)> {
+    lighting
+        .logo_color
+        .map(|color| resolve_lighting_color(lighting, color))
+}
+
+fn resolve_lighting_color(lighting: &Lighting, color: openlogi_core::color::Rgb) -> (u8, u8, u8) {
     if !lighting.enabled {
         return (0, 0, 0);
     }
-    let (r, g, b) = lighting.color.components();
+    let (r, g, b) = color.components();
     let scale =
         |c: u8| u8::try_from(u16::from(c) * u16::from(lighting.brightness) / 100).unwrap_or(c);
     (scale(r), scale(g), scale(b))
@@ -1624,6 +1638,22 @@ mod tests {
     /// The cookie of the keyboard with unit ID `unit`.
     fn lead(unit: u32) -> LeadCookie {
         LeadCookie::for_unit_id(unit.to_be_bytes()).expect("a nonzero unit ID")
+    }
+
+    #[test]
+    fn the_logo_colour_follows_brightness_and_the_master_switch() {
+        let mut lighting = Lighting {
+            brightness: 50,
+            logo_color: Some(openlogi_core::color::Rgb::new(200, 100, 0)),
+            ..Lighting::default()
+        };
+        assert_eq!(lighting_logo_rgb(&lighting), Some((100, 50, 0)));
+
+        lighting.enabled = false;
+        assert_eq!(lighting_logo_rgb(&lighting), Some((0, 0, 0)));
+
+        lighting.logo_color = None;
+        assert_eq!(lighting_logo_rgb(&lighting), None);
     }
 
     #[test]

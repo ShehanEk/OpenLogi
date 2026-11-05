@@ -11,6 +11,7 @@ fn lighting_roundtrips_per_device() {
             enabled: true,
             color: "00aabb".parse().expect("valid hex"),
             brightness: 75,
+            logo_color: None,
         },
     );
     let restored = write_and_read(&cfg);
@@ -20,9 +21,22 @@ fn lighting_roundtrips_per_device() {
             enabled: true,
             color: "00aabb".parse().expect("valid hex"),
             brightness: 75,
+            logo_color: None,
         })
     );
     assert_eq!(restored.lighting("absent"), None);
+}
+
+#[test]
+fn a_logo_color_roundtrips_beside_the_main_color() {
+    let lighting = Lighting {
+        color: "00aabb".parse().expect("valid hex"),
+        logo_color: Some("ff0000".parse().expect("valid hex")),
+        ..Lighting::default()
+    };
+    let mut cfg = Config::default();
+    cfg.set_lighting("g502", lighting.clone());
+    assert_eq!(write_and_read(&cfg).lighting("g502"), Some(lighting));
 }
 
 #[test]

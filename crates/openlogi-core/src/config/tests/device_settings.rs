@@ -275,6 +275,20 @@ fn dpi_presets_roundtrip_per_device() {
 }
 
 #[test]
+fn saved_dpi_presets_win_over_the_stock_list() {
+    let mut cfg = Config::default();
+    let stock: Vec<Dpi> = [1200, 2400, 3200, 6400].map(Dpi::new).into();
+    assert_eq!(cfg.dpi_presets_or_stock("mouse", "0c08b"), stock);
+    assert!(cfg.dpi_presets_or_stock("mouse", "2b042").is_empty());
+
+    cfg.set_dpi_presets("mouse", vec![Dpi::new(800)]);
+    assert_eq!(
+        cfg.dpi_presets_or_stock("mouse", "0c08b"),
+        vec![Dpi::new(800)]
+    );
+}
+
+#[test]
 fn empty_dpi_presets_skip_serialization() {
     let mut cfg = Config::default();
     // Add a binding so the device block exists.

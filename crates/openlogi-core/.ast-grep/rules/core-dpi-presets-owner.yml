@@ -1,0 +1,19 @@
+# Owner: openlogi-core's Config::dpi_presets_or_stock — which DPI presets a
+# device runs with. The agent cycles that list and the DPI panel shows it.
+id: core-dpi-presets-owner
+language: rust
+severity: error
+message: A device's DPI presets come from Config::dpi_presets_or_stock. Call it instead of reading the stock list here.
+note: |
+  The agent fell back to the stock list while the DPI panel showed none, so the
+  mouse cycled presets the panel did not list. See "Single source of truth" in
+  AGENTS.md.
+files:
+  - crates/**/*.rs
+ignores:
+  - crates/openlogi-core/src/config/per_device.rs
+  - crates/openlogi-core/src/binding/gaming.rs
+  - "**/tests.rs"
+  - "**/tests/**"
+rule:
+  pattern: $A.stock_dpi_presets

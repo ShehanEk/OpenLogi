@@ -120,6 +120,27 @@ impl Config {
             .unwrap_or_default()
     }
 
+    /// The DPI presets `device_key` runs with: the saved list, or its model's
+    /// stock list until the user saves one. The agent cycles this list and the
+    /// DPI panel shows it, so the two cannot disagree.
+    #[must_use]
+    pub fn dpi_presets_or_stock(&self, device_key: &str, model_key: &str) -> Vec<Dpi> {
+        let saved = self.dpi_presets(device_key);
+        if !saved.is_empty() {
+            return saved;
+        }
+        GamingLayout::for_model_key(model_key)
+            .map(|layout| {
+                layout
+                    .stock_dpi_presets
+                    .iter()
+                    .copied()
+                    .map(Dpi::new)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Replace the DPI preset list for `device_key`. Pass an empty `Vec` to
     /// clear (the device block is kept; the field is just omitted on save
     /// thanks to `skip_serializing_if`).

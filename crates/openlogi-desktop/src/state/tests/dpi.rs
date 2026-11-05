@@ -75,6 +75,50 @@ fn the_hardcoded_default_is_shown_with_neither_a_live_read_nor_a_configured_valu
     assert_eq!(state.dpi_for_current(), DEFAULT_DPI);
 }
 
+/// The known mouse as a G502 HERO, the model with a stock preset list.
+fn g502_hero() -> AppState {
+    let mut state = state_with_a_known_mouse();
+    state.devices.records[0].model_key = "0c08b".to_string();
+    state
+}
+
+fn dpis(values: &[u16]) -> Vec<Dpi> {
+    values.iter().copied().map(Dpi::new).collect()
+}
+
+#[test]
+fn a_mouse_with_no_saved_presets_shows_its_stock_list_without_saving_it() {
+    let state = g502_hero();
+
+    assert_eq!(state.dpi_presets(), dpis(&[1200, 2400, 3200, 6400]));
+    assert!(
+        state.config.dpi_presets(KNOWN_MOUSE_KEY).is_empty(),
+        "showing the stock list must not write it to the config"
+    );
+}
+
+#[test]
+fn saved_presets_replace_the_stock_list() {
+    let mut state = g502_hero();
+    let _ = state.commit_dpi_presets(dpis(&[800]));
+
+    assert_eq!(state.dpi_presets(), dpis(&[800]));
+}
+
+#[test]
+fn removing_the_last_saved_preset_brings_the_stock_list_back() {
+    let mut state = g502_hero();
+    let _ = state.commit_dpi_presets(dpis(&[800]));
+    let _ = state.commit_dpi_presets(Vec::new());
+
+    assert_eq!(state.dpi_presets(), dpis(&[1200, 2400, 3200, 6400]));
+}
+
+#[test]
+fn a_mouse_with_no_stock_list_still_shows_no_presets() {
+    assert!(state_with_a_known_mouse().dpi_presets().is_empty());
+}
+
 /// The DPI saved for the known mouse before each write test.
 const SAVED: Dpi = Dpi::new(800);
 

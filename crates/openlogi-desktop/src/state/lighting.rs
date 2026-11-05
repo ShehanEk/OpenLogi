@@ -27,6 +27,13 @@ impl AppState {
             GamingLayout::for_model_key(&record.model_key).is_some_and(|layout| layout.logo_light)
         })
     }
+    /// Whether each key of the active device can show its own color.
+    #[must_use]
+    pub fn has_key_lighting(&self) -> bool {
+        self.current_record()
+            .and_then(|record| record.capabilities)
+            .is_some_and(|capabilities| capabilities.key_lighting)
+    }
     /// The stored lighting config for `key` on `route_key`, or `None` when
     /// unset (or overridden to unset on that link).
     #[must_use]

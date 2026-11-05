@@ -228,6 +228,10 @@ pub struct Capabilities {
     /// persisted identity.
     #[serde(default)]
     pub sidetone: bool,
+    /// Each key can show its own color — HID++ `0x8080 PerKeyLighting`.
+    /// Appended after `sidetone`: crosses the IPC and the persisted identity.
+    #[serde(default)]
+    pub key_lighting: bool,
 }
 
 impl Capabilities {
@@ -284,6 +288,7 @@ impl Capabilities {
             onboard_profiles: ids.contains(&0x8100),
             button_spy: ids.contains(&0x8110),
             sidetone: ids.contains(&0x8300),
+            key_lighting: ids.contains(&0x8080),
         }
     }
 
@@ -833,6 +838,7 @@ mod tests {
                     onboard_profiles: false,
                     button_spy: false,
                     sidetone: false,
+                    key_lighting: false,
                 }),
                 settings_revision: 0,
                 hidpp10: false,
@@ -958,13 +964,18 @@ mod tests {
                 onboard_profiles: false,
                 button_spy: false,
                 sidetone: false,
+                key_lighting: false,
             }
         );
         assert!(!Capabilities::from_feature_ids(&[0x0003, 0x1b04]).thumbwheel);
         // A wired G-series keyboard: PerKeyLighting (0x8080), no DPI/buttons.
         let keyboard = Capabilities::from_feature_ids(&[0x0001, 0x8080]);
+        assert!(keyboard.key_lighting);
         assert_eq!(
-            keyboard,
+            Capabilities {
+                key_lighting: false,
+                ..keyboard
+            },
             Capabilities {
                 buttons: false,
                 pointer: false,
@@ -987,6 +998,7 @@ mod tests {
                 onboard_profiles: false,
                 button_spy: false,
                 sidetone: false,
+                key_lighting: false,
             }
         );
         // No driving features → nothing offered.

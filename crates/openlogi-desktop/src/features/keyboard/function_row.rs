@@ -45,7 +45,7 @@ use openlogi_core::binding::{Action, ActionRingIcon, ButtonId, KeypadPage, Workf
 use super::editors::{
     PowerUserKind, text_editor_placeholder, text_editor_seed, workflow_editor_seed,
 };
-use crate::app::{glow_canvas, keyboard_glow};
+use crate::app::{device_lights, glow_canvas};
 use crate::features::binding_editor::{
     PickFn, action_icon_path, action_rows, compact_panel, divider, editor_scroll_list,
     editor_section,
@@ -394,11 +394,13 @@ impl Render for FunctionRowView {
         // Without a record there is no device surface to trust, and the F-row
         // fallback is as honest as anything that shows.
         let known_keypad = state.and_then(AppState::current_keypad);
-        let glow = state.and_then(|state| {
-            state
-                .current_record()
-                .and_then(|record| keyboard_glow(state, record))
-        });
+        let lights = state
+            .and_then(|state| {
+                state
+                    .current_record()
+                    .map(|record| device_lights(state, record))
+            })
+            .unwrap_or_default();
 
         let viewport = window.viewport_size();
         let viewport_h = f32::from(viewport.height);
@@ -490,7 +492,7 @@ impl Render for FunctionRowView {
                 .hovered(hovered)
                 .into_any_element()
         } else {
-            KeyboardPane::new(slots.clone(), image_path, glow, render_size, view.clone())
+            KeyboardPane::new(slots.clone(), image_path, lights, render_size, view.clone())
                 .selected(selected)
                 .hovered(hovered)
                 .into_any_element()
@@ -1001,7 +1003,7 @@ fn overview_row(
 struct KeyboardPane {
     slots: Vec<KeySlot>,
     image_path: Option<std::path::PathBuf>,
-    glow: Option<(Arc<GlowGeometry>, Hsla)>,
+    lights: Vec<(Arc<GlowGeometry>, Hsla)>,
     render_size: (f32, f32),
     selected: Option<usize>,
     hovered: Option<usize>,
@@ -1012,14 +1014,14 @@ impl KeyboardPane {
     fn new(
         slots: Vec<KeySlot>,
         image_path: Option<std::path::PathBuf>,
-        glow: Option<(Arc<GlowGeometry>, Hsla)>,
+        lights: Vec<(Arc<GlowGeometry>, Hsla)>,
         render_size: (f32, f32),
         view: Entity<FunctionRowView>,
     ) -> Self {
         Self {
             slots,
             image_path,
-            glow,
+            lights,
             render_size,
             selected: None,
             hovered: None,
@@ -1071,9 +1073,7 @@ impl RenderOnce for KeyboardPane {
                 // keys occlude it and the colour only reads through the
                 // inter-key gaps — same treatment as the home gallery and the
                 // mouse model.
-                    .when_some(self.glow, |this, (geom, color)| {
-                    this.child(glow_canvas(geom, color))
-                })
+                    .children(self.lights.into_iter().map(|(geom, color)| glow_canvas(geom, color)))
                     .child(image_or_fallback(img_path, img_w, img_h, &pal)),
             )
             .child(keyboard_leader_canvas(&layout, selected, hovered, img_h))

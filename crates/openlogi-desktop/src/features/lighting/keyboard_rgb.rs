@@ -15,17 +15,18 @@ use gpui_kit::component::{Selectable as _, h_flex, slider::Slider, v_flex};
 use openlogi_core::color::Rgb;
 use openlogi_core::config::Lighting;
 
+use super::key_painter::{KeyMap, key_painter};
 use crate::state::{AppState, StateEvent};
 use crate::ui::commit_slider::{CommitSlider, SliderRange};
 use crate::ui::components::{Toggle, toggle_row};
 use crate::ui::slider_row::SliderRow;
 use crate::ui::theme::{self, Palette};
 
-const SWATCH: f32 = 28.;
+pub(super) const SWATCH: f32 = 28.;
 
 /// Preset colors. Deliberately small — covering the common keyboard accent
 /// colors.
-const PALETTE: &[Rgb] = &[
+pub(super) const PALETTE: &[Rgb] = &[
     Rgb::new(0xff, 0x3b, 0x30),
     Rgb::new(0xff, 0x95, 0x00),
     Rgb::new(0xff, 0xcc, 0x00),
@@ -39,10 +40,16 @@ const PALETTE: &[Rgb] = &[
 
 pub struct LightingPanel {
     brightness: CommitSlider<u8>,
+    /// What clicking a key paints; `None` puts it back on the main color.
+    key_brush: Option<Rgb>,
     _state_obs: Subscription,
 }
 
 impl LightingPanel {
+    pub(super) fn set_brush(&mut self, brush: Option<Rgb>) {
+        self.key_brush = brush;
+    }
+
     pub fn new(cx: &mut Context<Self>) -> Self {
         let initial = AppState::try_read(cx).map_or(100, |s| s.lighting().brightness);
         // The slider drives the device only on release, to avoid streaming a
@@ -64,6 +71,7 @@ impl LightingPanel {
             AppState::repaint_on(cx, |event| matches!(event, StateEvent::LightingChanged(_)));
         Self {
             brightness,
+            key_brush: PALETTE.first().copied(),
             _state_obs: state_obs,
         }
     }
@@ -106,6 +114,12 @@ impl Render for LightingPanel {
         } else {
             v_flex().child(swatches(Zone::Main))
         };
+        let key_map = AppState::try_read(cx)
+            .filter(|state| state.has_key_lighting())
+            .and_then(AppState::current_record)
+            .and_then(|record| record.asset.as_ref())
+            .and_then(KeyMap::for_asset);
+        let painter = key_map.map(|map| key_painter(&map, self.key_brush, &lighting, pal, cx));
 
         v_flex()
             .gap_3()
@@ -138,6 +152,7 @@ impl Render for LightingPanel {
                     ["100%"],
                 ),
             )
+            .children(painter)
     }
 }
 

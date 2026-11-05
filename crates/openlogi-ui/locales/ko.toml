@@ -741,6 +741,11 @@ camera_light_auto_description = "카메라를 하나라도 사용 중이면 조�
 keyboard_lighting_description = "OpenLogi가 실행 중일 때 적용되며 키보드에는 저장되지 않습니다."
 main_light = "Main light"
 logo_light = "Logo"
+individual_keys = "Individual keys"
+individual_keys_description = "Pick a colour, then click keys. Other keys use the main colour."
+use_main_color = "Use the main colour"
+reset_keys = "Reset keys"
+key = "Key"
 
 [action_ring]
 actions_ring = "액션 링"

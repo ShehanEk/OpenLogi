@@ -737,6 +737,19 @@ pub struct Lighting {
     /// encoding is positional.
     #[serde(default, deserialize_with = "deserialize_optional_lighting_color")]
     pub logo_color: Option<Rgb>,
+    /// Keys with their own color, by ascending HID usage. Every other key
+    /// shows [`Self::color`].
+    #[serde(default)]
+    pub key_colors: Vec<KeyColor>,
+}
+
+/// One key's own color in [`Lighting::key_colors`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeyColor {
+    /// The key's HID keyboard usage (Esc is `41`).
+    pub usage: u8,
+    pub color: Rgb,
 }
 
 /// Persisted settings for a standalone light such as Logitech Litra.
@@ -774,6 +787,25 @@ impl Lighting {
     #[must_use]
     pub fn logo_color_or_main(&self) -> Rgb {
         self.logo_color.unwrap_or(self.color)
+    }
+
+    /// The color the key with HID `usage` shows.
+    #[must_use]
+    pub fn key_color_or_main(&self, usage: u8) -> Rgb {
+        self.key_colors
+            .iter()
+            .find(|key| key.usage == usage)
+            .map_or(self.color, |key| key.color)
+    }
+
+    /// Give the key with HID `usage` its own color, or put it back on the main
+    /// one with `None`.
+    pub fn set_key_color(&mut self, usage: u8, color: Option<Rgb>) {
+        self.key_colors.retain(|key| key.usage != usage);
+        if let Some(color) = color {
+            let at = self.key_colors.partition_point(|key| key.usage < usage);
+            self.key_colors.insert(at, KeyColor { usage, color });
+        }
     }
 }
 
@@ -835,6 +867,7 @@ impl Default for Lighting {
             color: default_lighting_color(),
             brightness: default_lighting_brightness(),
             logo_color: None,
+            key_colors: Vec::new(),
         }
     }
 }

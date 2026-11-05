@@ -181,7 +181,8 @@ pub use succession::Identity;
 ///      chooses on release, so the overlay reports the pointer leaving every
 ///      slot as well as entering one. `ActionRingInvocation::size` appended,
 ///      the size the overlay draws the ring at.
-/// v46: `Lighting::logo_color` added.
+/// v46: `Lighting::logo_color` and `Lighting::key_colors` added;
+///      `Capabilities::key_lighting` appended.
 pub const PROTOCOL_VERSION: u32 = 46;
 
 /// Environment variable through which the agent hands a supervised helper the

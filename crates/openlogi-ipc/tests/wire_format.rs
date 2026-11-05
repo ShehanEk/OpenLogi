@@ -124,8 +124,9 @@ fn lighting_wire_format() {
             color: "8000ff".parse().expect("valid hex"),
             brightness: 80,
             logo_color: None,
+            key_colors: Vec::new(),
         },
-        "01063830303066665000",
+        "0106383030306666500000",
     );
     assert_wire(
         &Lighting {
@@ -133,8 +134,9 @@ fn lighting_wire_format() {
             color: "8000ff".parse().expect("valid hex"),
             brightness: 80,
             logo_color: Some("00ff80".parse().expect("valid hex")),
+            key_colors: Vec::new(),
         },
-        "0106383030306666500106303066663830",
+        "010638303030666650010630306666383000",
     );
 }
 
@@ -949,6 +951,7 @@ fn device_inventory() {
                 onboard_profiles: false,
                 button_spy: false,
                 sidetone: true,
+                key_lighting: false,
             }),
             settings_revision: 7,
             hidpp10: false,
@@ -956,7 +959,7 @@ fn device_inventory() {
     }];
     assert_wire(
         &inventory,
-        "010d426f6c74205265636569766572fb6d04fb48c501084630304443414645010101094d58204d535452335301fb34b00001010150020001030106323134304c5a0102030400010100fb34b0fb8240000b010101000001010101010001010101010101000000010700",
+        "010d426f6c74205265636569766572fb6d04fb48c501084630304443414645010101094d58204d535452335301fb34b00001010150020001030106323134304c5a0102030400010100fb34b0fb8240000b01010100000101010101000101010101010100000001000700",
     );
 }
 

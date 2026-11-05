@@ -121,58 +121,113 @@ pub(super) fn light_hsla(color: Rgb, opacity: f32) -> Hsla {
     .into()
 }
 
-/// Everything to paint behind `record`'s image in its gallery entry: a
+/// Everything to paint behind `record`'s image : a
 /// keyboard's glow, or a mouse's lights.
-fn device_lights(state: &AppState, record: &DeviceRecord) -> Vec<(Arc<GlowGeometry>, Hsla)> {
+pub(crate) fn device_lights(
+    state: &AppState,
+    record: &DeviceRecord,
+) -> Vec<(Arc<GlowGeometry>, Hsla)> {
     keyboard_glow(state, record)
         .into_iter()
-        .chain(mouse_lights(state, record))
+        .chain(image_lights(state, record))
         .collect()
 }
 
 /// What a mouse's light cutouts show while its lighting is switched off.
 pub(super) const LIGHT_OFF: Rgb = Rgb::new(0x1a, 0x1a, 0x1a);
 
-/// Each light of a mouse with saved lighting, ready for [`glow_canvas`] to paint
-/// behind its render: the render's lights are transparent cutouts, so only their
-/// shapes take the colour. Empty until the user has set a colour, and for a
-/// depot that ships no light zones.
-pub(crate) fn mouse_lights(
+/// The lights of a device with saved lighting, ready for [`glow_canvas`] to
+/// paint behind its render: a mouse's zones, or a keyboard's individually
+/// colored keys. The render's lights and legends are transparent cutouts, so
+/// only their shapes take the colour. Empty until the user has set a colour, and
+/// for a depot that does not place them.
+pub(crate) fn image_lights(
     state: &AppState,
     record: &DeviceRecord,
 ) -> Vec<(Arc<GlowGeometry>, Hsla)> {
-    if record.kind != DeviceKind::Mouse {
-        return Vec::new();
-    }
     let lighting = state.lighting_for(&record.config_key, &record.route_key);
-    match (lighting, record.asset.as_ref()) {
-        (Some(lighting), Some(asset)) => light_zones(asset, &lighting),
+    match (record.kind, lighting, record.asset.as_ref()) {
+        (DeviceKind::Mouse, Some(lighting), Some(asset)) => light_zones(asset, &lighting),
+        (DeviceKind::Keyboard, Some(lighting), Some(asset)) => key_lights(asset, &lighting),
         _ => Vec::new(),
     }
 }
 
-/// The zones of `asset`'s front render in `lighting`'s colours. The zones are in
-/// the metadata's origin pixels, which only locate them on a render of that size.
-pub(super) fn light_zones(
+/// Render pixels a colored key's light reaches past its rectangle, into the gap
+/// around the cap. A legend alone is too thin to read at gallery size.
+const KEY_HALO: f32 = 5.;
+
+/// `lighting`'s individually colored keys on `asset`'s render, one layer per
+/// colour. Nothing while the lighting is off: the keyboard is dark.
+pub(super) fn key_lights(
     asset: &ResolvedAsset,
     lighting: &Lighting,
 ) -> Vec<(Arc<GlowGeometry>, Hsla)> {
-    let Some(image) = asset.metadata.image("device_image") else {
+    if !lighting.enabled {
+        return Vec::new();
+    }
+    let Some((image, width, height)) = placed_image(asset) else {
         return Vec::new();
     };
+    let Some(zone) = image.zones.iter().find(|zone| zone.id == "PERKEY_KEYBOARD") else {
+        return Vec::new();
+    };
+    let mut layers: Vec<(Rgb, Vec<GlowSeg>)> = Vec::new();
+    for (usage, rect) in zone.keys() {
+        let Some(key) = lighting.key_colors.iter().find(|key| key.usage == usage) else {
+            continue;
+        };
+        let segment = GlowSeg {
+            x: (rect.x - KEY_HALO) / width,
+            y: (rect.y - KEY_HALO) / height,
+            w: (rect.width + 2. * KEY_HALO) / width,
+            h: (rect.height + 2. * KEY_HALO) / height,
+        };
+        match layers.iter_mut().find(|(color, _)| *color == key.color) {
+            Some((_, segments)) => segments.push(segment),
+            None => layers.push((key.color, vec![segment])),
+        }
+    }
+    layers
+        .into_iter()
+        .map(|(color, segments)| {
+            let geometry = GlowGeometry {
+                aspect: width / height,
+                segments,
+            };
+            (Arc::new(geometry), light_hsla(color, 1.))
+        })
+        .collect()
+}
+
+/// The metadata entry of `asset`'s front render and its size in pixels. Zones
+/// are in the metadata's origin pixels, which only locate them on a render of
+/// that size.
+fn placed_image(asset: &ResolvedAsset) -> Option<(&openlogi_assets::ImageEntry, f32, f32)> {
+    let image = asset.metadata.image("device_image")?;
     let (width, height) = (image.origin.width, image.origin.height);
     if asset.hero_image_path.as_ref() != Some(&asset.image_path)
         || (asset.png_width, asset.png_height) != (width, height)
         || width == 0
         || height == 0
     {
-        return Vec::new();
+        return None;
     }
     #[expect(
         clippy::cast_precision_loss,
         reason = "render dimensions are a few thousand pixels"
     )]
-    let (width, height) = (width as f32, height as f32);
+    Some((image, width as f32, height as f32))
+}
+
+/// The zones of `asset`'s front render in `lighting`'s colours.
+pub(super) fn light_zones(
+    asset: &ResolvedAsset,
+    lighting: &Lighting,
+) -> Vec<(Arc<GlowGeometry>, Hsla)> {
+    let Some((image, width, height)) = placed_image(asset) else {
+        return Vec::new();
+    };
     image
         .zones
         .iter()

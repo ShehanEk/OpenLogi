@@ -164,6 +164,7 @@ pub async fn set_keyboard_color_with_on(
             method,
             color: Rgb::new(r, g, b),
             logo_color: None,
+            key_colors: Vec::new(),
         }
         .apply_on(&channel, || cancel.is_cancelled(), || gate.allows_io())
         .await

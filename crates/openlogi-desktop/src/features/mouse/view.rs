@@ -27,7 +27,7 @@ use super::inspector::{
     binding_inspector,
 };
 use super::leader_lines::{Geometry as LeaderGeometry, Label, paint as paint_leader_lines};
-use crate::app::{glow_canvas, keyboard_glow, mouse_lights};
+use crate::app::{glow_canvas, image_lights, keyboard_glow};
 use crate::features::binding_editor::{Recording, RecordsShortcut, ShortcutRecorder};
 use crate::features::keyboard::editors::{PowerUserKind, text_editor_placeholder};
 use crate::features::profiles::{profile_canvas_status, profile_name};
@@ -127,7 +127,7 @@ impl<'a> MouseWorkspaceData<'a> {
                 .and_then(|record| keyboard_glow(state, record)),
             lights: state
                 .current_record()
-                .map(|record| mouse_lights(state, record))
+                .map(|record| image_lights(state, record))
                 .unwrap_or_default(),
             thumbwheel: state
                 .current_record()

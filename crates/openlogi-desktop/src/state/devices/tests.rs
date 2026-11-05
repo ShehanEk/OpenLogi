@@ -367,6 +367,7 @@ fn mouse_identity(name: &str) -> DeviceIdentity {
             onboard_profiles: false,
             button_spy: false,
             sidetone: false,
+            key_lighting: false,
         },
         light_capabilities: None,
         model_info: None,

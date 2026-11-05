@@ -1,7 +1,7 @@
 //! `openlogi diag lighting <RRGGBB>` — set an online RGB device to a solid
 //! colour via the same HID++ lighting write path the GUI uses.
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use clap::{Args, ValueEnum};
 use openlogi_core::color::Rgb;
 use openlogi_hid::LightingMethod;
@@ -79,6 +79,42 @@ pub async fn run_zones(args: LightingZonesArgs) -> Result<()> {
             None => println!("  zone {}: unknown location", zone.index),
         }
     }
+    Ok(())
+}
+
+#[derive(Debug, Args)]
+pub struct LightingKeysArgs {
+    /// Keys as `USAGE=RRGGBB`, with the HID usage in decimal (Esc is `41`).
+    #[arg(required = true)]
+    pub keys: Vec<String>,
+
+    /// Colour of every other key, as `RRGGBB`.
+    #[arg(long, default_value = "000000")]
+    pub base: String,
+
+    /// Run against the online device whose name contains this string
+    /// (case-insensitive). Useful when several devices are connected.
+    #[arg(long, value_name = "NAME")]
+    pub device: Option<String>,
+}
+
+/// Paint the listed keys through `0x8080`.
+pub async fn run_keys(args: LightingKeysArgs) -> Result<()> {
+    let base: Rgb = args.base.parse()?;
+    let keys = args
+        .keys
+        .iter()
+        .map(|key| {
+            let (usage, color) = key
+                .split_once('=')
+                .with_context(|| format!("{key:?} is not USAGE=RRGGBB"))?;
+            Ok((usage.parse()?, color.parse()?))
+        })
+        .collect::<Result<Vec<(u8, Rgb)>>>()?;
+    let (route, name) = select_device(args.device.as_deref(), &[0x8080]).await?;
+    println!("setting {} keys on {name} ({route})", keys.len());
+    openlogi_hid::set_key_colors(&route, base, keys).await?;
+    println!("done");
     Ok(())
 }
 

@@ -42,6 +42,8 @@ pub enum DiagCmd {
     Lighting(lighting::LightingArgs),
     /// List the HID++ 0x8070 lighting zones a device reports.
     LightingZones(lighting::LightingZonesArgs),
+    /// Set individual keys to their own colours (e.g. `41=ff0000 58=00ff00`).
+    LightingKeys(lighting::LightingKeysArgs),
     /// Read or set the HID++ 0x2121 wheel reporting resolution.
     Wheel(wheel::WheelArgs),
     /// Read 0x2205 pointer scaling → write a test value → read back → restore.
@@ -71,6 +73,7 @@ impl DiagCmd {
             Self::Smartshift(args) => smartshift::run(args).await,
             Self::Lighting(args) => lighting::run(args).await,
             Self::LightingZones(args) => lighting::run_zones(args).await,
+            Self::LightingKeys(args) => lighting::run_keys(args).await,
             Self::Wheel(args) => wheel::run(args).await,
             Self::PointerSpeed(args) => pointer_speed::run(args).await,
             Self::Onboard(args) => onboard::run(args).await,

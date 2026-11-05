@@ -213,22 +213,52 @@ pub async fn set_keyboard_color_with(
     g: u8,
     b: u8,
 ) -> Result<(), WriteError> {
-    let target = route.clone();
-    let gate = device_io_gate();
-    crate::lighting::LightingJob::spawn(route, move |cancel| async move {
+    apply_lighting(
+        route,
         device::LightingWrite {
             method,
             color: openlogi_core::color::Rgb::new(r, g, b),
             logo_color: None,
-        }
-        .apply(
-            &*native_backend(),
-            &target,
-            || cancel.is_cancelled(),
-            || gate.allows_io(),
-        )
-        .await
-        .map(drop)
+            key_colors: Vec::new(),
+        },
+    )
+    .await
+}
+
+/// Set each listed key to its own colour and every other key to `base`.
+pub async fn set_key_colors(
+    route: &DeviceRoute,
+    base: openlogi_core::color::Rgb,
+    keys: Vec<(u8, openlogi_core::color::Rgb)>,
+) -> Result<(), WriteError> {
+    apply_lighting(
+        route,
+        device::LightingWrite {
+            method: LightingMethod::Auto,
+            color: base,
+            logo_color: None,
+            key_colors: keys,
+        },
+    )
+    .await
+}
+
+async fn apply_lighting(
+    route: &DeviceRoute,
+    write: device::LightingWrite,
+) -> Result<(), WriteError> {
+    let target = route.clone();
+    let gate = device_io_gate();
+    crate::lighting::LightingJob::spawn(route, move |cancel| async move {
+        write
+            .apply(
+                &*native_backend(),
+                &target,
+                || cancel.is_cancelled(),
+                || gate.allows_io(),
+            )
+            .await
+            .map(drop)
     })?
     .finish()
     .await

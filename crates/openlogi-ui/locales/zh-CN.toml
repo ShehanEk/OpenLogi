@@ -741,6 +741,11 @@ camera_light_auto_description = "任意摄像头使用时开灯，所有摄像�
 keyboard_lighting_description = "由 OpenLogi 在运行时应用，不保存在键盘中。"
 main_light = "Main light"
 logo_light = "Logo"
+individual_keys = "Individual keys"
+individual_keys_description = "Pick a colour, then click keys. Other keys use the main colour."
+use_main_color = "Use the main colour"
+reset_keys = "Reset keys"
+key = "Key"
 
 [action_ring]
 actions_ring = "操作环"

@@ -78,10 +78,20 @@ impl Zone {
             .flat_map(|component| &component.renderings)
             .filter_map(|rendering| rendering.rect)
     }
+
+    /// Each key of a per-key zone: its HID usage and its first rectangle.
+    pub fn keys(&self) -> impl Iterator<Item = (u8, ZoneRect)> + '_ {
+        self.components.iter().filter_map(|component| {
+            let rect = component.renderings.iter().find_map(|r| r.rect)?;
+            Some((component.id?, rect))
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 struct ZoneComponent {
+    #[serde(default)]
+    id: Option<u8>,
     #[serde(default)]
     renderings: Vec<ZoneRendering>,
 }

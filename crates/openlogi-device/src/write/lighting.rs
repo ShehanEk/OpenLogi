@@ -118,6 +118,7 @@ pub async fn set_keyboard_color_with(
         method,
         color: openlogi_core::color::Rgb::new(r, g, b),
         logo_color: None,
+        key_colors: Vec::new(),
     }
     .apply(backend, route, || false, || true)
     .await
@@ -125,7 +126,7 @@ pub async fn set_keyboard_color_with(
 }
 
 /// One complete solid-colour transaction, including RGB ownership rollback.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct LightingWrite {
     /// Preferred protocol path.
     pub method: LightingMethod,
@@ -134,6 +135,10 @@ pub struct LightingWrite {
     /// The logo zone's own colour on the `0x8070` path. `None` paints it
     /// [`Self::color`]; the other paths have no logo zone to address.
     pub logo_color: Option<openlogi_core::color::Rgb>,
+    /// `(HID usage, colour)` of keys with their own colour, for
+    /// [`LightingMethod::Auto`] on a `0x8080` keyboard. Other keys show
+    /// [`Self::color`].
+    pub key_colors: Vec<(u8, openlogi_core::color::Rgb)>,
 }
 
 impl LightingWrite {
@@ -208,6 +213,16 @@ impl LightingWrite {
             }
             LightingMethod::Auto => {}
         }
+        if !self.key_colors.is_empty() {
+            match scope.read(self.paint_keys(channel, index)).await {
+                Err(WriteError::FeatureUnsupported { feature_hex })
+                    if feature_hex == PER_KEY_LIGHTING_FEATURE =>
+                {
+                    debug!("no 0x8080 per-key lighting — painting one colour");
+                }
+                other => return other.map(|()| None),
+            }
+        }
         match scope
             .read(set_color_effects(
                 channel,
@@ -247,13 +262,33 @@ impl LightingWrite {
         }
     }
 
+    /// Paint [`Self::key_colors`] over [`Self::color`]. The fixed colour goes
+    /// through `0x8070` first, where the keyboard has one, because a per-key
+    /// frame cannot replace a running onboard effect.
+    async fn paint_keys(&self, channel: &Arc<HidppChannel>, index: u8) -> Result<(), WriteError> {
+        let entries = key_entries(self.color, &self.key_colors);
+        // Before the first write, so a keyboard without per-key lighting stays
+        // on the caller's one-colour path, untouched.
+        resolve_feature_index(channel, index, PER_KEY_LIGHTING_FEATURE)
+            .await?
+            .ok_or(WriteError::FeatureUnsupported {
+                feature_hex: PER_KEY_LIGHTING_FEATURE,
+            })?;
+        match set_color_effects(channel, index, self.color, self.logo_color).await {
+            Err(WriteError::FeatureUnsupported { feature_hex })
+                if feature_hex == COLOR_LED_EFFECTS_FEATURE => {}
+            other => other?,
+        }
+        stream_per_key(channel, index, &entries).await
+    }
+
     /// Paint through `0x8081`. With an `0x8071` effect engine the frame goes
     /// under its software control, since the firmware otherwise draws its own
     /// effect over host frames; without one there is nothing to claim. Zone
     /// discovery precedes the claim, so a device without usable zones still
     /// falls back without mutation.
     async fn per_key_v2(
-        self,
+        &self,
         channel: &Arc<HidppChannel>,
         index: u8,
         engine: Option<&rgb::RgbEngine>,
@@ -660,6 +695,33 @@ async fn set_color_per_key(
     g: u8,
     b: u8,
 ) -> Result<(), WriteError> {
+    let color = openlogi_core::color::Rgb::new(r, g, b);
+    stream_per_key(channel, device_index, &key_entries(color, &[])).await?;
+    debug!(device_index, r, g, b, "set keyboard colour via 0x8080");
+    Ok(())
+}
+
+/// Every key usage `0x8080` addresses, in `base` unless `keys` names it.
+pub(super) fn key_entries(
+    base: openlogi_core::color::Rgb,
+    keys: &[(u8, openlogi_core::color::Rgb)],
+) -> Vec<(u8, openlogi_core::color::Rgb)> {
+    (0x00u8..=0xe8)
+        .map(|usage| {
+            let color = keys
+                .iter()
+                .find_map(|&(key, color)| (key == usage).then_some(color));
+            (usage, color.unwrap_or(base))
+        })
+        .collect()
+}
+
+/// Stream `entries` as `0x8080` frames, then commit them.
+async fn stream_per_key(
+    channel: &Arc<HidppChannel>,
+    device_index: u8,
+    entries: &[(u8, openlogi_core::color::Rgb)],
+) -> Result<(), WriteError> {
     let feature_index = resolve_feature_index(channel, device_index, PER_KEY_LIGHTING_FEATURE)
         .await?
         .ok_or(WriteError::FeatureUnsupported {
@@ -680,7 +742,7 @@ async fn set_color_per_key(
         })
     };
 
-    for report in per_key_frames(device_index, feature_index, r, g, b) {
+    for report in per_key_frames_for(device_index, feature_index, entries) {
         write_whole_raw_report(channel, &report, HidppOperation::Lighting).await?;
     }
 
@@ -706,14 +768,11 @@ async fn set_color_per_key(
         .send_v20(per_key_commit(device_index, feature_index))
         .await
         .map_err(classify_per_key_error)?;
-    debug!(
-        device_index,
-        feature_index, r, g, b, "set keyboard colour via 0x8080"
-    );
     Ok(())
 }
 
 /// The 64-byte `0x12` frames that set every key to `(r, g, b)`.
+#[cfg(test)]
 pub(super) fn per_key_frames(
     device_index: u8,
     feature_index: u8,
@@ -721,12 +780,21 @@ pub(super) fn per_key_frames(
     g: u8,
     b: u8,
 ) -> Vec<Vec<u8>> {
+    let color = openlogi_core::color::Rgb::new(r, g, b);
+    per_key_frames_for(device_index, feature_index, &key_entries(color, &[]))
+}
+
+/// The 64-byte `0x12` frames that carry `entries`.
+pub(super) fn per_key_frames_for(
+    device_index: u8,
+    feature_index: u8,
+    entries: &[(u8, openlogi_core::color::Rgb)],
+) -> Vec<Vec<u8>> {
     let mut reports = Vec::new();
     // Each 64-byte `0x12` "set group keys" packet carries up to 14
-    // `(keyID, R, G, B)` entries; keyIDs are HID usage codes. Cover the whole
-    // keyboard usage range (incl. modifiers at `0xe0..`) so every key lights.
-    let key_ids: Vec<u8> = (0x00u8..=0xe8).collect();
-    for chunk in key_ids.chunks(KEYS_PER_FRAME as usize) {
+    // `(keyID, R, G, B)` entries; keyIDs are HID usage codes. The whole
+    // keyboard usage range (incl. modifiers at `0xe0..`) lights every key.
+    for chunk in entries.chunks(KEYS_PER_FRAME as usize) {
         let mut rep = vec![0u8; 64];
         rep[0] = REPORT_SET_KEYS;
         rep[1] = device_index;
@@ -736,8 +804,9 @@ pub(super) fn per_key_frames(
         // Only the last frame is short (233 keys = 16 × 14 + 9). Declaring 14
         // there would hand the firmware five zeroed entries as real ones.
         rep[7] = u8::try_from(chunk.len()).unwrap_or(KEYS_PER_FRAME);
-        for (i, &key) in chunk.iter().enumerate() {
+        for (i, &(key, color)) in chunk.iter().enumerate() {
             let off = 8 + i * 4;
+            let (r, g, b) = color.components();
             rep[off] = key;
             rep[off + 1] = r;
             rep[off + 2] = g;
@@ -794,6 +863,7 @@ pub async fn set_keyboard_color_with_on(
         method,
         color: openlogi_core::color::Rgb::new(r, g, b),
         logo_color: None,
+        key_colors: Vec::new(),
     }
     .apply_on(shared, || false, || shared.channel().is_connected())
     .await

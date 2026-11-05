@@ -741,6 +741,11 @@ camera_light_auto_description = "Allume l’éclairage lorsqu’une caméra est 
 keyboard_lighting_description = "Appliqué par OpenLogi tant qu’il est ouvert, sans être enregistré sur le clavier."
 main_light = "Main light"
 logo_light = "Logo"
+individual_keys = "Individual keys"
+individual_keys_description = "Pick a colour, then click keys. Other keys use the main colour."
+use_main_color = "Use the main colour"
+reset_keys = "Reset keys"
+key = "Key"
 
 [action_ring]
 actions_ring = "Anneau d’actions"

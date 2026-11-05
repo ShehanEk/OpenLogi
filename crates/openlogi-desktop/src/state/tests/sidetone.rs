@@ -101,6 +101,7 @@ fn an_offline_headset_is_not_written() {
     inventory.paired[0].online = false;
     inventory.paired[0].capabilities = Some(Capabilities {
         sidetone: true,
+        key_lighting: false,
         ..Capabilities::default()
     });
     let resolver = AssetResolver::new();

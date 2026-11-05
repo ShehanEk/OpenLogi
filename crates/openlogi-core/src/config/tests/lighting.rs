@@ -12,6 +12,7 @@ fn lighting_roundtrips_per_device() {
             color: "00aabb".parse().expect("valid hex"),
             brightness: 75,
             logo_color: None,
+            key_colors: Vec::new(),
         },
     );
     let restored = write_and_read(&cfg);
@@ -22,9 +23,35 @@ fn lighting_roundtrips_per_device() {
             color: "00aabb".parse().expect("valid hex"),
             brightness: 75,
             logo_color: None,
+            key_colors: Vec::new(),
         })
     );
     assert_eq!(restored.lighting("absent"), None);
+}
+
+#[test]
+fn key_colors_roundtrip_in_usage_order_and_can_be_cleared() {
+    let (red, blue) = (
+        "ff0000".parse().expect("valid hex"),
+        "0000ff".parse().expect("valid hex"),
+    );
+    let mut lighting = Lighting::default();
+    lighting.set_key_color(58, Some(blue));
+    lighting.set_key_color(41, Some(red));
+    lighting.set_key_color(58, Some(red));
+    assert_eq!(lighting.key_colors[0].usage, 41);
+    assert_eq!(lighting.key_color_or_main(58), red);
+    assert_eq!(lighting.key_color_or_main(4), lighting.color);
+
+    let mut cfg = Config::default();
+    cfg.set_lighting("g512", lighting.clone());
+    assert_eq!(
+        write_and_read(&cfg).lighting("g512"),
+        Some(lighting.clone())
+    );
+
+    lighting.set_key_color(41, None);
+    assert_eq!(lighting.key_colors.len(), 1);
 }
 
 #[test]

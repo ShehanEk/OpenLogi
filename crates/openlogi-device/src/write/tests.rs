@@ -310,6 +310,35 @@ fn status_match_preserves_absent_torque() {
 }
 
 #[test]
+fn listed_keys_keep_their_own_colour_over_the_base() {
+    use openlogi_core::color::Rgb;
+    let (base, red) = (Rgb::new(0, 0, 0x40), Rgb::new(0xff, 0, 0));
+
+    let frames = super::lighting::per_key_frames_for(
+        0xff,
+        0x0c,
+        &super::lighting::key_entries(base, &[(41, red)]),
+    );
+
+    let entries: Vec<_> = frames
+        .iter()
+        .flat_map(|report| {
+            let count = usize::from(report[7]);
+            report[8..8 + count * 4].as_chunks::<4>().0.to_vec()
+        })
+        .collect();
+    assert_eq!(entries.len(), 0xe9);
+    for [usage, r, g, b] in entries {
+        let want = if usage == 41 {
+            [0xff, 0, 0]
+        } else {
+            [0, 0, 0x40]
+        };
+        assert_eq!([r, g, b], want, "usage {usage}");
+    }
+}
+
+#[test]
 fn per_key_lighting_builds_only_very_long_frames_then_one_long_commit() {
     let frames = per_key_frames(0x03, 0x27, 0x11, 0x22, 0x33);
 
@@ -1610,6 +1639,7 @@ async fn a_logo_colour_reaches_only_the_logo_zone() -> Result<(), WriteError> {
         method: LightingMethod::Effects,
         color: openlogi_core::color::Rgb::new(0x11, 0x22, 0x33),
         logo_color: Some(openlogi_core::color::Rgb::new(0x44, 0x55, 0x66)),
+        key_colors: Vec::new(),
     }
     .apply_on(&shared, || false, || true)
     .await?;

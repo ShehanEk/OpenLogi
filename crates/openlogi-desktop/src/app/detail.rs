@@ -144,7 +144,7 @@ pub(super) fn detail_content(
             cx,
         )
         .into_any_element(),
-        DetailTab::Lighting => lighting_tab(panels.lighting_panel).into_any_element(),
+        DetailTab::Lighting => lighting_tab(panels.lighting_panel, cx).into_any_element(),
         DetailTab::Camera => {
             camera_tab(panels.camera_preview, panels.camera_controls).into_any_element()
         }
@@ -829,10 +829,16 @@ fn audio_tab(audio_panel: &gpui::Entity<AudioPanel>) -> impl IntoElement {
 /// untitled card — the rail already names the page "Lighting", so a card
 /// title would only repeat it. Shown when the device reports a lighting
 /// capability — see [`DetailTab::tabs_for`].
-fn lighting_tab(lighting_panel: &gpui::Entity<LightingPanel>) -> impl IntoElement {
+fn lighting_tab(lighting_panel: &gpui::Entity<LightingPanel>, cx: &gpui::App) -> impl IntoElement {
+    // A keyboard's keys need the room to be clicked one at a time.
+    let width = if AppState::try_read(cx).is_some_and(AppState::has_key_lighting) {
+        ContentWidth::Large
+    } else {
+        ContentWidth::Small
+    };
     tab_body(
         DetailTab::Lighting,
-        ContentWidth::Small,
+        width,
         PanelCard::new(
             SharedString::default(),
             Icon::new(IconName::Palette),

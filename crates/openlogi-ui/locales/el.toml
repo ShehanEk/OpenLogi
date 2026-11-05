@@ -741,6 +741,11 @@ camera_light_auto_description = "Ανάβει το φως όταν χρησιμ�
 keyboard_lighting_description = "Εφαρμόζεται από το OpenLogi όσο εκτελείται και δεν αποθηκεύεται στο πληκτρολόγιο."
 main_light = "Main light"
 logo_light = "Logo"
+individual_keys = "Individual keys"
+individual_keys_description = "Pick a colour, then click keys. Other keys use the main colour."
+use_main_color = "Use the main colour"
+reset_keys = "Reset keys"
+key = "Key"
 
 [action_ring]
 actions_ring = "Δακτύλιος ενεργειών"

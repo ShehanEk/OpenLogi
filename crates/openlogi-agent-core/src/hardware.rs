@@ -449,6 +449,7 @@ impl DeviceOp {
             color: openlogi_core::color::Rgb::new(r, g, b),
             logo_color: lighting_logo_rgb(lighting)
                 .map(|(r, g, b)| openlogi_core::color::Rgb::new(r, g, b)),
+            key_colors: lighting_key_rgbs(lighting),
         };
         openlogi_hid::lighting::LightingJob::spawn(&self.route, move |cancel| async move {
             let _lease = tokio::time::timeout(WRITE_TIMEOUT, receiver_access.acquire_for_io())
@@ -1587,6 +1588,22 @@ pub fn lighting_logo_rgb(lighting: &Lighting) -> Option<(u8, u8, u8)> {
         .map(|color| resolve_lighting_color(lighting, color))
 }
 
+/// The keys with their own colour, scaled by brightness. Empty while lighting
+/// is off, so the keyboard goes dark on the one-colour path.
+fn lighting_key_rgbs(lighting: &Lighting) -> Vec<(u8, openlogi_core::color::Rgb)> {
+    if !lighting.enabled {
+        return Vec::new();
+    }
+    lighting
+        .key_colors
+        .iter()
+        .map(|key| {
+            let (r, g, b) = resolve_lighting_color(lighting, key.color);
+            (key.usage, openlogi_core::color::Rgb::new(r, g, b))
+        })
+        .collect()
+}
+
 fn resolve_lighting_color(lighting: &Lighting, color: openlogi_core::color::Rgb) -> (u8, u8, u8) {
     if !lighting.enabled {
         return (0, 0, 0);
@@ -1638,6 +1655,22 @@ mod tests {
     /// The cookie of the keyboard with unit ID `unit`.
     fn lead(unit: u32) -> LeadCookie {
         LeadCookie::for_unit_id(unit.to_be_bytes()).expect("a nonzero unit ID")
+    }
+
+    #[test]
+    fn key_colours_follow_brightness_and_the_master_switch() {
+        let mut lighting = Lighting {
+            brightness: 50,
+            ..Lighting::default()
+        };
+        lighting.set_key_color(41, Some(openlogi_core::color::Rgb::new(200, 100, 0)));
+        assert_eq!(
+            lighting_key_rgbs(&lighting),
+            [(41, openlogi_core::color::Rgb::new(100, 50, 0))]
+        );
+
+        lighting.enabled = false;
+        assert!(lighting_key_rgbs(&lighting).is_empty());
     }
 
     #[test]

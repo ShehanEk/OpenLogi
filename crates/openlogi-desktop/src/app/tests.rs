@@ -1256,6 +1256,7 @@ fn tabs_prefer_buttons_when_a_keyboard_kind_measures_a_pointer() {
         onboard_profiles: false,
         button_spy: false,
         sidetone: false,
+        key_lighting: false,
     });
     let tabs = DetailTab::tabs_for(&record(DeviceKind::Keyboard, caps));
     assert!(
@@ -1295,6 +1296,7 @@ fn tabs_follow_capabilities_not_kind() {
         onboard_profiles: false,
         button_spy: false,
         sidetone: false,
+        key_lighting: false,
     });
     // After 0x0005 kind-correction the record has kind=Mouse, not Keyboard.
     let tabs = DetailTab::tabs_for(&record(DeviceKind::Mouse, caps));
@@ -1381,6 +1383,7 @@ fn keyboard_without_asset_hides_buttons_tab() {
         onboard_profiles: false,
         button_spy: false,
         sidetone: false,
+        key_lighting: false,
     });
     let tabs = DetailTab::tabs_for(&record(DeviceKind::Keyboard, caps));
     assert!(
@@ -1414,6 +1417,7 @@ fn keyboard_with_buttons_shows_keys_tab() {
         onboard_profiles: false,
         button_spy: false,
         sidetone: false,
+        key_lighting: false,
     });
     let keyboard = record(DeviceKind::Keyboard, caps);
     let tabs = DetailTab::tabs_for(&keyboard);
@@ -1493,6 +1497,50 @@ fn g502_light_asset() -> crate::services::assets::ResolvedAsset {
         png_height: 2000,
         side_view: None,
     }
+}
+
+#[test]
+fn individually_colored_keys_are_painted_at_their_place_by_color() {
+    let (red, blue) = (
+        openlogi_core::color::Rgb::new(0xff, 0, 0),
+        openlogi_core::color::Rgb::new(0, 0, 0xff),
+    );
+    let mut asset = g502_light_asset();
+    asset.metadata = serde_json::from_str(
+        r#"{"images":[{"key":"device_image","origin":{"width":1000,"height":2000},"zones":[
+        {"id":"PERKEY_KEYBOARD","components":[
+            {"id":41,"renderings":[{"rect":{"x":100,"y":200,"width":100,"height":200}}]},
+            {"id":58,"renderings":[{"rect":{"x":300,"y":200,"width":100,"height":200}}]},
+            {"id":59,"renderings":[{"rect":{"x":500,"y":200,"width":100,"height":200}}]},
+            {"id":60,"renderings":[{"rect":{"x":700,"y":200,"width":100,"height":200}}]}
+        ]}]}]}"#,
+    )
+    .expect("valid metadata");
+    let mut lighting = openlogi_core::config::Lighting::default();
+    lighting.set_key_color(41, Some(red));
+    lighting.set_key_color(59, Some(red));
+    lighting.set_key_color(58, Some(blue));
+
+    let layers = super::home::key_lights(&asset, &lighting);
+
+    let colors: Vec<_> = layers.iter().map(|(_, color)| *color).collect();
+    assert_eq!(
+        colors,
+        [
+            super::home::light_hsla(red, 1.),
+            super::home::light_hsla(blue, 1.)
+        ]
+    );
+    assert_eq!(
+        layers[0].0.segments.len(),
+        2,
+        "key 60 has no colour of its own"
+    );
+    assert_eq!(layers[0].0.segments[0].x, 0.095);
+    assert_eq!(layers[1].0.segments[0].x, 0.295);
+
+    lighting.enabled = false;
+    assert!(super::home::key_lights(&asset, &lighting).is_empty());
 }
 
 #[test]
@@ -1590,6 +1638,7 @@ fn light_tab_follows_light_capabilities() {
 fn a_sidetone_headset_opens_on_the_audio_tab() {
     let caps = Some(Capabilities {
         sidetone: true,
+        key_lighting: false,
         ..Capabilities::default()
     });
     let headset = record(DeviceKind::Headset, caps);
